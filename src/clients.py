@@ -210,8 +210,6 @@ class Clients():
 
         try:
             torrents = qbt_client.torrents.info()
-            if meta.get('debug'):
-                console.log(f"[debug] Retrieved torrents from qBittorrent API: {torrents}")
             for torrent in torrents:
                 torrent_path = self.get_torrent_path(torrent, meta, remote_path_map, local_path, remote_path)
                 if torrent_path and await self.is_matching_torrent(meta, torrent, torrent_path, torrent_storage_dir):
@@ -249,12 +247,12 @@ class Clients():
     async def is_matching_torrent(self, meta, torrent, torrent_path, torrent_storage_dir):
         if meta['is_disc'] in ("", None) and len(meta['filelist']) == 1:
             if torrent_path == meta['filelist'][0] and len(torrent.files) == len(meta['filelist']):
-                return await self.verify_torrent(torrent, torrent_storage_dir)
+                return await self.verify_torrent(meta, torrent, torrent_storage_dir)
         elif meta['path'] == torrent_path:
-            return await self.verify_torrent(torrent, torrent_storage_dir)
+            return await self.verify_torrent(meta, torrent, torrent_storage_dir)
         return False
 
-    async def verify_torrent(self, torrent, torrent_storage_dir):
+    async def verify_torrent(self, meta, torrent, torrent_storage_dir):
         valid, torrent_path = await self.is_valid_torrent(meta, f"{torrent_storage_dir}/{torrent.hash}.torrent", torrent.hash, 'qbit', print_err=False)
         if valid:
             console.print(f"[green]Found a matching .torrent with hash: [bold yellow]{torrent.hash}")
