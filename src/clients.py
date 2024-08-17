@@ -66,7 +66,6 @@ class Clients():
         
 
     async def find_existing_torrent(self, meta):
-        # Determine the default torrent client
         default_torrent_client = meta.get('client') or self.config['DEFAULT']['default_torrent_client']
         
         if default_torrent_client == 'none':
@@ -80,18 +79,20 @@ class Clients():
             console.print(f'[bold red]Missing torrent_storage_dir for {default_torrent_client}')
             return None
         elif not os.path.exists(str(torrent_storage_dir)) and torrent_client != "watch":
+            if meta.get('debug'):
+                console.log(f"[debug] Checking directory existence: {torrent_storage_dir}")
             console.print(f"[bold red]Invalid torrent_storage_dir path: [bold yellow]{torrent_storage_dir}")
-            return None  # Ensure the function exits if the path is invalid
+            return None
 
-        # Attempt to find the torrent file using available hashes
         torrenthash = meta.get('torrenthash') or meta.get('ext_torrenthash')
         if torrenthash and os.path.exists(torrent_storage_dir):
+            if meta.get('debug'):
+                console.log(f"[debug] Checking torrent file existence: {torrent_storage_dir}/{torrenthash}.torrent")
             torrent_path = f"{torrent_storage_dir}/{torrenthash}.torrent"
             valid, torrent_path = await self.is_valid_torrent(meta, torrent_path, torrenthash, torrent_client, print_err=True)
             if valid:
                 return torrent_path
         
-        # If no valid torrent was found and qBit search is enabled, search in qBittorrent
         if torrent_client == 'qbit' and client.get('enable_search'):
             torrenthash = await self.search_qbit_for_torrent(meta, client)
             if torrenthash:
@@ -105,12 +106,11 @@ class Clients():
 
 
     async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, print_err=False):
-        # Normalize torrent hash based on client type
         torrenthash = torrenthash.lower().strip() if torrent_client in ('qbit', 'deluge') else torrenthash.upper().strip()
         torrent_path = torrent_path.replace(torrenthash.upper(), torrenthash)
         
         if meta.get('debug'):
-            console.log(torrent_path)
+            console.log(f"[debug] Checking torrent path: {torrent_path}")
         
         if not os.path.exists(torrent_path):
             console.print(f'[bold yellow]{torrent_path} was not found')
@@ -190,18 +190,28 @@ class Clients():
                 password=client['qbit_pass'], 
                 VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
             )
+            if meta.get('debug'):
+                console.log("[debug] Attempting to log in to qBittorrent API")
             qbt_client.auth_log_in()
+            if meta.get('debug'):
+                console.log("[debug] qBittorrent API login successful")
         except (qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError) as e:
             console.print(f"[bold red]Error connecting to qBittorrent: {str(e)}")
+            if meta.get('debug'):
+                console.log(f"[debug] API error: {str(e)}")
             return None
         except Exception as e:
             console.print(f"[bold red]Unexpected error during qBittorrent connection: {str(e)}")
+            if meta.get('debug'):
+                console.log(f"[debug] Unexpected error: {str(e)}")
             return None
 
         remote_path_map, local_path, remote_path = await self.handle_remote_path_mapping(meta)
 
         try:
             torrents = qbt_client.torrents.info()
+            if meta.get('debug'):
+                console.log(f"[debug] Retrieved torrents from qBittorrent API: {torrents}")
             for torrent in torrents:
                 torrent_path = self.get_torrent_path(torrent, meta, remote_path_map, local_path, remote_path)
                 if torrent_path and await self.is_matching_torrent(meta, torrent, torrent_path, torrent_storage_dir):
@@ -209,6 +219,7 @@ class Clients():
         except Exception as e:
             console.print(f"[bold red]Unexpected error during torrent search: {str(e)}")
             if meta.get('debug'):
+                console.log(f"[debug] Error during torrent search: {str(e)}")
                 console.print_exception()
 
         return None
