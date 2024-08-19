@@ -29,38 +29,47 @@ class Clients():
 
     async def add_to_client(self, meta, tracker):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent"
+        
         if meta.get('no_seed', False) == True:
             console.print(f"[bold red]--no-seed was passed, so the torrent will not be added to the client")
             console.print(f"[bold yellow]Add torrent manually to the client")
             return
+
         if os.path.exists(torrent_path):
             torrent = Torrent.read(torrent_path)
         else:
             return
-        if meta.get('client', None) == None:
-            default_torrent_client = self.config['DEFAULT']['default_torrent_client']
-        else:
-            default_torrent_client = meta['client']
-        if meta.get('client', None) == 'none':
+
+        # Set default_torrent_client from meta or configuration
+        default_torrent_client = meta.get('client', None) or self.config['DEFAULT'].get('default_torrent_client', None)
+        
+        if default_torrent_client is None or default_torrent_client == "none":
+            console.print("[bold red]No torrent client configured or specified.")
             return
-        if default_torrent_client == "none":
-            return 
-        client = self.config['TORRENT_CLIENTS'][default_torrent_client]
+
+        client = self.config['TORRENT_CLIENTS'].get(default_torrent_client, None)
+        
+        if client is None:
+            console.print(f"[bold red]Torrent client '{default_torrent_client}' not found in configuration.")
+            return
+
         torrent_client = client['torrent_client']
         
         local_path, remote_path = await self.remote_path_map(meta)
         
         console.print(f"[bold green]Adding to {torrent_client}")
+        
         if torrent_client.lower() == "rtorrent":
             self.rtorrent(meta['path'], torrent_path, torrent, meta, local_path, remote_path, client)
         elif torrent_client == "qbit":
             await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta)
         elif torrent_client.lower() == "deluge":
             if meta['type'] == "DISC":
-                path = os.path.dirname(meta['path'])
+                meta['path'] = os.path.dirname(meta['path'])
             self.deluge(meta['path'], torrent_path, torrent, local_path, remote_path, client, meta)
         elif torrent_client.lower() == "watch":
             shutil.copy(torrent_path, client['watch_folder'])
+        
         return
    
         
@@ -327,23 +336,27 @@ class Clients():
 
     def deluge(self, path, torrent_path, torrent, local_path, remote_path, client, meta):
         client = DelugeRPCClient(client['deluge_url'], int(client['deluge_port']), client['deluge_user'], client['deluge_pass'])
-        # client = LocalDelugeRPCClient()
         client.connect()
-        if client.connected == True:
+        
+        if client.connected:
             console.print("Connected to Deluge")    
             isdir = os.path.isdir(path)
-            #Remote path mount
+            
+            # Remote path mount
             if local_path.lower() in path.lower() and local_path.lower() != remote_path.lower():
                 path = path.replace(local_path, remote_path)
                 path = path.replace(os.sep, '/')
             
+            # Ensure path is correct and set download location
             path = os.path.dirname(path)
-
-            client.call('core.add_torrent_file', torrent_path, base64.b64encode(torrent.dump()), {'download_location' : path, 'seed_mode' : True})
+            download_location = {'download_location': path, 'seed_mode': True}
+            
+            client.call('core.add_torrent_file', torrent_path, base64.b64encode(torrent.dump()), download_location)
+            
             if meta['debug']:
                 console.print(f"[cyan]Path: {path}")
         else:
-            console.print("[bold red]Unable to connect to deluge")
+            console.print("[bold red]Unable to connect to Deluge")
 
 
 
