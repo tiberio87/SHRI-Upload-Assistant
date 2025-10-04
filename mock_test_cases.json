@@ -1,0 +1,137 @@
+[
+  {
+    "desc": "UNTOUCHED in filename - should convert ENCODE to REMUX",
+    "filename": "Babe va in città (1998) UNTOUCHED 1080p VC-1 DTS HD ENG AC3 iTA-ENG Ciame.mkv",
+    "meta": {
+      "name": "Babe va in città 1998 ENCODE 1080p VC-1 DTS-HD MA ITA-ENG Ciame",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "VC-1",
+      "source": "BluRay",
+      "audio": "DTS-HD MA",
+      "year": "1998",
+      "title": "Babe: Pig in the City",
+      "tag": "Ciame"
+    }
+  },
+  {
+    "desc": "VU in filename - should convert ENCODE to REMUX",
+    "filename": "Babe va in città (1998) VU 1080p VC-1 DTS HD ENG AC3 iTA-ENG Ciame.mkv",
+    "meta": {
+      "name": "Babe va in città 1998 ENCODE 1080p VC-1 DTS-HD MA ITA-ENG Ciame",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "VC-1",
+      "source": "BluRay",
+      "audio": "DTS-HD MA",
+      "year": "1998",
+      "title": "Babe: Pig in the City",
+      "tag": "Ciame"
+    }
+  },
+  {
+    "desc": "UNTOUCHED mid-filename - should convert ENCODE to REMUX",
+    "filename": "Alarum.2025.1080p.BluRay.UNTOUCHED.AVC-FHC.mkv",
+    "meta": {
+      "name": "Alarum 2025 ENCODE 1080p BluRay AVC FHC",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "AVC",
+      "source": "BluRay",
+      "audio": "DTS-HD MA",
+      "year": "2025",
+      "title": "Alarum",
+      "tag": "FHC"
+    }
+  },
+  {
+    "desc": "Already REMUX - should remain REMUX unchanged",
+    "filename": "Love.&.Other.Drugs.2010.BluRay.1080p.DD.5.1.AVC.REMUX-TiB78.mkv",
+    "meta": {
+      "name": "Love & Other Drugs 2010 REMUX 1080p BluRay AVC DD 5.1 TiB78",
+      "type": "REMUX",
+      "resolution": "1080p",
+      "video_codec": "AVC",
+      "source": "BluRay",
+      "audio": "DD 5.1",
+      "year": "2010",
+      "title": "Love & Other Drugs",
+      "tag": "TiB78"
+    }
+  },
+  {
+    "desc": "UNTOUCHED with different group - should convert to REMUX",
+    "filename": "Love.&.Other.Drugs.2010.1080p.BluRay.UNTOUCHED.AVC-TiB78.mkv",
+    "meta": {
+      "name": "Love & Other Drugs 2010 ENCODE 1080p BluRay AVC TiB78",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "AVC",
+      "source": "BluRay",
+      "audio": "DTS-HD MA",
+      "year": "2010",
+      "title": "Love & Other Drugs",
+      "tag": "TiB78"
+    }
+  },
+  {
+    "desc": "VU variant - should convert to REMUX",
+    "filename": "Love.&.Other.Drugs.2010.1080p.BluRay.VU.AVC-TiB78.mkv",
+    "meta": {
+      "name": "Love & Other Drugs 2010 ENCODE 1080p BluRay AVC TiB78",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "AVC",
+      "source": "BluRay",
+      "audio": "DTS-HD MA",
+      "year": "2010",
+      "title": "Love & Other Drugs",
+      "tag": "TiB78"
+    }
+  },
+  {
+    "desc": "Normal ENCODE x265 - should remain ENCODE",
+    "filename": "Locked.In.Trappola.2025.1080p.BluRay.x265-FHC.mkv",
+    "meta": {
+      "name": "Locked In Trappola 2025 ENCODE 1080p BluRay x265 FHC",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "HEVC",
+      "source": "BluRay",
+      "audio": "AC3",
+      "year": "2025",
+      "title": "Locked In - Trappola",
+      "tag": "FHC"
+    }
+  },
+  {
+    "desc": "Normal ENCODE with dual audio - should remain ENCODE",
+    "filename": "Dragonheart.1996.Bluray.1080p.x264.AC3.DTS.iTA.ENG-Peppe.mkv",
+    "meta": {
+      "name": "Dragonheart 1996 ENCODE 1080p BluRay x264 AC3 DTS iTA ENG Peppe",
+      "type": "ENCODE",
+      "resolution": "1080p",
+      "video_codec": "AVC",
+      "source": "BluRay",
+      "audio": "DTS",
+      "year": "1996",
+      "title": "Dragonheart",
+      "tag": "Peppe"
+    }
+  },
+  {
+    "desc": "ENCODE 1080i from HDTV - should remain ENCODE",
+    "filename": "The.Reader.2008.1080i.iTA.ENG.mkv",
+    "meta": {
+      "name": "The Reader 2008 ENCODE 1080i iTA ENG",
+      "type": "ENCODE",
+      "resolution": "1080i",
+      "video_codec": "AVC",
+      "source": "HDTV",
+      "audio": "AC3",
+      "year": "2008",
+      "title": "The Reader",
+      "tag": ""
+    }
+  }
+]
