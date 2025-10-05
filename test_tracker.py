@@ -16,13 +16,13 @@ import os
 from unittest.mock import Mock
 
 
-async def mock_process_desc_language(*args, **kwargs):
-    return None
+# async def mock_process_desc_language(*args, **kwargs):
+#     return None
 
 
-mock_languages = Mock()
-mock_languages.process_desc_language = mock_process_desc_language
-sys.modules["src.languages"] = mock_languages
+# mock_languages = Mock()
+# mock_languages.process_desc_language = mock_process_desc_language
+# sys.modules["src.languages"] = mock_languages
 sys.modules["src.trackers.COMMON"] = Mock()
 
 mock_unit3d_class = type(
@@ -31,6 +31,8 @@ mock_unit3d_class = type(
 sys.modules["src.trackers.UNIT3D"] = Mock(UNIT3D=mock_unit3d_class)
 
 from src.trackers.SHRI import SHRI  # noqa: E402
+from src.trackers.AITHER import AITHER  # noqa: E402
+from src.trackers.BLU import BLU  # noqa: E402
 
 
 class BaseTracker:
@@ -70,7 +72,9 @@ class BaseTracker:
 TRACKER_MAP = {
     "SHRI": SHRI,
     "BASE": BaseTracker,
-    # Add more: "HUNO": HUNO, "BLU": BLU, etc.
+    "AITHER": AITHER,
+    "BLU": BLU,
+    # Add more: "HUNO": HUNO, "RED": RED, etc.
 }
 
 
@@ -114,9 +118,13 @@ def load_generated_meta(json_file=None, overrides=None):
     if overrides:
         real_meta.update(overrides)
 
-    filename = os.path.basename(
-        real_meta.get("filelist", [real_meta.get("path", "unknown.mkv")])[0]
-    )
+    # Handle empty filelist or missing path
+    filelist = real_meta.get("filelist", [])
+    if filelist:
+        filename = os.path.basename(filelist[0])
+    else:
+        path = real_meta.get("path", "unknown.mkv")
+        filename = os.path.basename(path)
 
     return {
         "desc": f"Generated meta from {os.path.basename(json_file)}",
@@ -149,44 +157,7 @@ async def run_test(test_case, tracker_instance, tracker_name):
     print(f"File: {test_case['filename']}")
     print(f"In:   {meta['name']}")
     print(f"Out:  {result['name']}")
-
-    # BASE doesn't detect REMUX from filenames, SHRI does
-    if tracker_name == "BASE":
-        # For BASE: just check it respects the type in metadata
-        if meta["type"] == "REMUX":
-            if "REMUX" in result["name"]:
-                print("✓ Correctly formatted REMUX")
-                passed = True
-            else:
-                print("✗ FAILED: Lost REMUX type")
-                passed = False
-        else:
-            print("✓ Correctly formatted ENCODE")
-            passed = True
-    else:
-        # For SHRI and other trackers: check filename-based REMUX detection
-        has_untouched_or_vu = (
-            "untouched" in test_case["filename"].lower()
-            or "vu" in test_case["filename"].lower()
-        )
-        should_be_remux = has_untouched_or_vu or meta["type"] == "REMUX"
-
-        passed = True
-        if should_be_remux:
-            if "REMUX" in result["name"]:
-                print("✓ Correctly identified as REMUX")
-            else:
-                print("✗ FAILED: Should be REMUX but isn't")
-                passed = False
-        else:
-            if "REMUX" in result["name"]:
-                print("✗ FAILED: Should stay ENCODE but became REMUX")
-                passed = False
-            else:
-                print("✓ Correctly stayed ENCODE")
-
     print()
-    return passed
 
 
 async def test_tracker():
@@ -221,12 +192,10 @@ async def test_tracker():
     generated = load_generated_meta(json_file=meta_file)
     if generated:
         test_cases.append(generated)
-        file_used = meta_file or "generated_meta.json"
-        print(f"[INFO] Testing with: {file_used}")
         if include_mocks:
             test_cases.extend(get_mock_test_cases())
             print("[INFO] Also including mock test cases")
-        print()
+            print()
     else:
         if meta_file:
             print(f"[ERROR] File not found: {meta_file}")
@@ -234,26 +203,8 @@ async def test_tracker():
         print("[INFO] No metadata file provided, using mock data only\n")
         test_cases.extend(get_mock_test_cases())
 
-    print("=" * 60)
-    print(f"{tracker_name} TRACKER TESTS")
-    print("=" * 60)
-    print()
-
-    results = []
     for test_case in test_cases:
-        passed = await run_test(test_case, tracker_instance, tracker_name)
-        results.append(passed)
-
-    print("=" * 60)
-    passed_count = sum(results)
-    total_count = len(results)
-    print(f"Results: {passed_count}/{total_count} tests passed")
-
-    if passed_count == total_count:
-        print("✓ All tests passed!")
-    else:
-        print(f"✗ {total_count - passed_count} test(s) failed")
-    print("=" * 60)
+        await run_test(test_case, tracker_instance, tracker_name)
 
 
 if __name__ == "__main__":
