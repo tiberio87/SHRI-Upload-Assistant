@@ -13,26 +13,9 @@ import sys
 import json
 import asyncio
 import os
-from unittest.mock import Mock
-
-
-# async def mock_process_desc_language(*args, **kwargs):
-#     return None
-
-
-# mock_languages = Mock()
-# mock_languages.process_desc_language = mock_process_desc_language
-# sys.modules["src.languages"] = mock_languages
-sys.modules["src.trackers.COMMON"] = Mock()
-
-mock_unit3d_class = type(
-    "UNIT3D", (), {"__init__": lambda self, config, tracker_name: None}
-)
-sys.modules["src.trackers.UNIT3D"] = Mock(UNIT3D=mock_unit3d_class)
-
-from src.trackers.SHRI import SHRI  # noqa: E402
-from src.trackers.AITHER import AITHER  # noqa: E402
-from src.trackers.BLU import BLU  # noqa: E402
+from src.trackers.SHRI import SHRI
+from src.trackers.AITHER import AITHER
+from src.trackers.BLU import BLU
 
 
 class BaseTracker:
@@ -55,8 +38,7 @@ class BaseTracker:
         }
 
         for key, default_value in required_fields.items():
-            if key not in meta:
-                meta[key] = default_value
+            meta.setdefault(key, default_value)
 
         try:
             name_notag, name, clean_name, potential_missing = await get_name(meta)
@@ -91,8 +73,8 @@ def get_mock_test_cases(json_file="mock_test_cases.json"):
             "desc": "UNTOUCHED detection",
             "filename": "Movie.1998.UNTOUCHED.1080p.BluRay.AVC-Group.mkv",
             "meta": {
-                "name": "Movie 1998 ENCODE 1080p BluRay DD 5.1 x264-Group",
-                "type": "ENCODE",
+                "name": "Movie 1998 UNTOUCHED 1080p BluRay DD 5.1 AVC-Group",
+                "type": "REMUX",
                 "resolution": "1080p",
                 "video_codec": "AVC",
                 "source": "BluRay",
@@ -112,15 +94,19 @@ def load_generated_meta(json_file=None, overrides=None):
     if not os.path.exists(json_file):
         return None
 
-    with open(json_file, "r", encoding="utf-8") as f:
-        real_meta = json.load(f)
+    try:
+        with open(json_file, "r", encoding="utf-8") as f:
+            real_meta = json.load(f)
+    except Exception as e:
+        print(f"[ERROR] Failed to parse {json_file}: {e}")
+        return None
 
     if overrides:
         real_meta.update(overrides)
 
     # Handle empty filelist or missing path
     filelist = real_meta.get("filelist", [])
-    if filelist:
+    if filelist and len(filelist) > 0:
         filename = os.path.basename(filelist[0])
     else:
         path = real_meta.get("path", "unknown.mkv")
@@ -147,10 +133,14 @@ async def run_test(test_case, tracker_instance, tracker_name):
     }
 
     for key, value in defaults.items():
-        if key not in meta:
-            meta[key] = value
+        meta.setdefault(key, value)
 
     result = await tracker_instance.get_name(meta)
+
+    if not isinstance(result, dict) or "name" not in result:
+        print(f"[ERROR] Invalid result structure from {tracker_name}.get_name()")
+        print(f"Result: {result}")
+        return
 
     print(f"Tracker: {tracker_name}")
     print(f"Test: {test_case['desc']}")
@@ -183,7 +173,7 @@ async def test_tracker():
         print(f"Available: {', '.join(TRACKER_MAP.keys())}")
         sys.exit(1)
 
-    config = {"TRACKERS": {tracker_name: {"use_italian_title": False}}}
+    config = {"TRACKERS": {tracker_name: {"use_italian_title": True}}}
     tracker_class = TRACKER_MAP[tracker_name]
     tracker_instance = tracker_class(config)
 
@@ -198,7 +188,7 @@ async def test_tracker():
             print()
     else:
         if meta_file:
-            print(f"[ERROR] File not found: {meta_file}")
+            print(f"[ERROR] File not found or invalid: {meta_file}")
             sys.exit(1)
         print("[INFO] No metadata file provided, using mock data only\n")
         test_cases.extend(get_mock_test_cases())
