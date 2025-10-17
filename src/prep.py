@@ -354,7 +354,7 @@ class Prep():
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
-            valid_mi = validate_mediainfo(base_dir, folder_id, path=meta['path'], filelist=meta['filelist'], debug=meta['debug'])
+            valid_mi = validate_mediainfo(meta, debug=meta['debug'])
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False
@@ -376,7 +376,8 @@ class Prep():
                     console.print(f"[red] None of the required languages ({meta['has_languages']}) is available on the file {audio_languages}")
                     raise Exception("No matching languages")
             except Exception as e:
-                console.print(f"[red]Error checking languages: {e}")
+                console.print(f"[red]{e}")
+                return Exception("Language check failed")
 
         if not meta.get('emby', False):
             if 'description' not in meta or meta.get('description') is None:
@@ -396,6 +397,8 @@ class Prep():
             meta['keep_images'] = False
             if meta.get('imdb_id', 0) != 0:
                 meta['skip_trackers'] = True
+        if meta.get('emby_debug', False):
+            meta['skip_trackers'] = True
 
         if meta['debug']:
             pathed_time_start = time.time()
@@ -480,8 +483,6 @@ class Prep():
                         meta['tvmaze_id'] = ids['tvmaze_id']
                     if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
                         meta['tmdb_id'] = ids['tmdb_id']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
                 else:
@@ -502,8 +503,6 @@ class Prep():
                         meta['tmdb_id'] = ids['tmdb_id']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                 else:
                     ids = None
 
@@ -517,9 +516,12 @@ class Prep():
             if meta.get('infohash') is not None and not meta['base_torrent_created'] and not meta['we_checked_them_all'] and not ids:
                 meta = await client.get_ptp_from_hash(meta)
 
-            if not meta.get('image_list') and not meta.get('edit', False) and not ids:
+            meta['skip_this_content'] = False
+            if (meta.get('site_check', False) and not meta.get('edit', False)) or (not meta.get('edit', False) and not ids):
                 # Reuse information from trackers with fallback
                 await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
+                if meta.get('skip_this_content', False):
+                    raise Exception()
 
             if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
                 ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
@@ -540,8 +542,6 @@ class Prep():
                         meta['tvmaze_id'] = ids['tvmaze_id']
                     if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
                         meta['tmdb_id'] = ids['tmdb_id']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
                 else:
@@ -562,8 +562,6 @@ class Prep():
                         meta['tmdb_id'] = ids['tmdb_id']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                 else:
                     ids = None
 
@@ -630,10 +628,16 @@ class Prep():
                 unattended = True
             if meta.get('category') == "TV":
                 year = meta.get('manual_year', '') or meta.get('search_year', '') or meta.get('year', '')
+            elif meta.get('emby_debug', False):
+                year = ""
             else:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
-            tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
-            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
+            if meta.get('emby_debug', False) or meta['debug']:
+                debug = True
+            else:
+                debug = False
+            tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
+            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
             meta['category'] = category
@@ -902,6 +906,14 @@ class Prep():
                     meta['edition'] = re.sub(r"REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
             else:
                 meta['edition'] = ""
+
+            meta['valid_mi_settings'] = True
+            if not meta['is_disc'] and meta['type'] in ["ENCODE"] and meta['video_codec'] not in ["AV1"]:
+                valid_mi_settings = validate_mediainfo(meta, debug=meta['debug'], settings=True)
+                if not valid_mi_settings:
+                    console.print("[red]MediaInfo validation failed. This file does not contain encode settings.")
+                    meta['valid_mi_settings'] = False
+                    await asyncio.sleep(2)
 
             meta.get('stream', False)
             meta['stream'] = await self.stream_optimized(meta['stream'])

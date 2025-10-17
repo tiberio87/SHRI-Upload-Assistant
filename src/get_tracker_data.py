@@ -1,13 +1,17 @@
 import aiohttp
-import requests
-import os
+import cli_ui
 import json
+import os
+import requests
+import sys
 import time
+
 from data.config import config
+from src.btnid import get_btn_torrents
+from src.cleanup import cleanup, reset_terminal
+from src.clients import Clients
 from src.console import console
 from src.trackermeta import update_metadata_from_tracker
-from src.btnid import get_btn_torrents
-from src.clients import Clients
 from src.trackersetup import tracker_class_map
 
 client = Clients(config=config)
@@ -73,6 +77,8 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         # Check if a specific tracker is already set in meta
         if not meta.get('emby', False):
             tracker_keys = {
+                # preference some unit3d based trackers first
+                # since they can return tdb/imdb/tvdb ids
                 'aither': 'AITHER',
                 'blu': 'BLU',
                 'lst': 'LST',
@@ -83,6 +89,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 'btn': 'BTN',
                 'bhd': 'BHD',
                 'hdb': 'HDB',
+                'sp': 'SP',
                 'rf': 'RF',
                 'otw': 'OTW',
                 'yus': 'YUS',
@@ -146,6 +153,17 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 return meta
 
             while not found_match and specific_tracker:
+                meta_trackers = meta.get('trackers', [])
+                if isinstance(meta_trackers, str):
+                    meta_trackers = [t.strip().upper() for t in meta_trackers.split(',')]
+                elif isinstance(meta_trackers, list):
+                    meta_trackers = [t.upper() if isinstance(t, str) else t for t in meta_trackers]
+
+                if any(tracker in meta_trackers for tracker in specific_tracker) and meta.get('site_check', False):
+                    console.print("[yellow]Found the matching content in your client[/yellow]")
+                    meta['skip_this_content'] = True
+                    return meta
+
                 available_trackers, waiting_trackers = await get_available_trackers(specific_tracker, base_dir, debug=meta['debug'])
 
                 if available_trackers:
@@ -178,19 +196,47 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                     btn_id = meta.get('btn')
                     btn_api = config['DEFAULT'].get('btn_api')
                     if btn_api and len(btn_api) > 25:
-                        await get_btn_torrents(btn_api, btn_id, meta)
-                        if meta.get('imdb_id') != 0:
-                            found_match = True
-                            meta['matched_tracker'] = "BTN"
+                        imdb, tvdb = await get_btn_torrents(btn_api, btn_id, meta)
+                        if imdb != 0 or tvdb != 0:
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                                console.print(f"[green]Found BTN IDs: IMDb={imdb}, TVDb={tvdb}[/green]")
+                                try:
+                                    if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
+                                        if imdb != 0:
+                                            meta['imdb_id'] = int(imdb)
+                                        if tvdb != 0:
+                                            meta['tvdb_id'] = int(tvdb)
+                                        found_match = True
+                                        meta['matched_tracker'] = "BTN"
+                                except EOFError:
+                                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                    await cleanup()
+                                    reset_terminal()
+                                    sys.exit(1)
+                            else:
+                                if imdb != 0:
+                                    meta['imdb_id'] = int(imdb)
+                                if tvdb != 0:
+                                    meta['tvdb_id'] = int(tvdb)
+                                found_match = True
+                                meta['matched_tracker'] = "BTN"
                         await save_tracker_timestamp("BTN", base_dir=base_dir)
                 elif tracker_to_process == "ANT":
                     imdb_tmdb_list = await tracker_class_map['ANT'](config=config).get_data_from_files(meta)
-                    console.print(f"[green]ANT tracker data found: {imdb_tmdb_list}[/green]")
                     if imdb_tmdb_list:
-                        for d in imdb_tmdb_list:
-                            meta.update(d)
-                        found_match = True
-                        meta['matched_tracker'] = "ANT"
+                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                            console.print(f"[green]Found ANT IDs: {imdb_tmdb_list}[/green]")
+                            try:
+                                if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
+                                    for d in imdb_tmdb_list:
+                                        meta.update(d)
+                                    found_match = True
+                                    meta['matched_tracker'] = "ANT"
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                     await save_tracker_timestamp("ANT", base_dir=base_dir)
                 else:
                     meta = await process_tracker(tracker_to_process, meta, only_id)

@@ -153,6 +153,9 @@ config = {
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
 
+        # Use this client for injection (aka actually adding the torrent for uploading)
+        "inject_torrent_client": "",
+
         # Play the bell sound effect when asking for confirmation
         "sfx_on_prompt": True,
 
@@ -269,6 +272,10 @@ config = {
         # predb is not consistent, can timeout, but can find some releases not found on SRRDB
         "check_predb": False,
 
+        # Set true to prefer torrents with piece size <= 16 MiB when searching for existing torrents in clients
+        # Does not override MTV preference for small pieces
+        "prefer_max_16_torrent": False,
+
     },
 
     # these are used for DB links on AR
@@ -282,7 +289,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -431,6 +438,14 @@ config = {
             # Send uploads to DP modq for staff approval
             "modq": False,
         },
+        "EMUW": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Use Spanish title instead of English title, if available
+            "use_spanish_title": False,
+        },
         "FF": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -440,6 +455,8 @@ config = {
             "announce_url": "https://tracker.funfile.org:2711/<PASSKEY>/announce",
             # Set to True if you want to check whether your upload fulfills corresponding requests. This may slightly slow down the upload process.
             "check_requests": False,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "FL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -490,6 +507,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/HDS.txt
             "announce_url": "http://hd-space.pw/announce.php?pid=<PASSKEY>",
             "anon": False,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "HDT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -507,6 +526,8 @@ config = {
             "url": "https://hd-torrents.me/",
             "anon": False,
             "announce_url": "https://hdts-announce.ru/announce.php?pid=<PASS_KEY/PID>",
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "HHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -744,6 +765,12 @@ config = {
             "api_upload": True,
             # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
             "passkey": "",
+            "anon": False,
+            # Rehost images to the TL image host. Does not work with the API upload method.
+            # Keep in mind that screenshots are only anonymous if you enable the "Anonymous Gallery Uploads" option in your profile settings.
+            "img_rehost": True,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -759,6 +786,8 @@ config = {
         "TVC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
+            # 2 is listed as max images in rules. Please do not change unless you have permission
+            "image_count": 2,
             "api_key": "",
             "announce_url": "https://tvchaosuk.com/announce/<PASSKEY>",
             "anon": False,
@@ -849,6 +878,19 @@ config = {
 
             # Set to False to skip verify certificate for HTTPS connections; for instance, if the connection is using a self-signed certificate.
             # "VERIFY_WEBUI_CERTIFICATE": True,
+        },
+        "qbittorrent_searching": {
+            # an example of using a qBitTorrent client just for searching, when using another client for injection
+            "torrent_client": "qbit",
+            # qui reverse proxy url, see https://github.com/autobrr/qui#reverse-proxy-for-external-applications
+            # If using the qui reverse proxy, no other auth type needs to be set
+            "qui_proxy_url": "",
+            # enable_search to True will automatically try and find a suitable hash to save having to rehash when creating torrents
+            "enable_search": True,
+            "qbit_url": "http://127.0.0.1",
+            "qbit_port": "8080",
+            "qbit_user": "",
+            "qbit_pass": "",
         },
         "rtorrent": {
             "torrent_client": "rtorrent",

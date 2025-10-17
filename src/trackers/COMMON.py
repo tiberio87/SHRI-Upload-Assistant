@@ -40,6 +40,11 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
+    async def async_input(self, prompt):
+        """Gets user input in a non-blocking way using asyncio.to_thread"""
+        user_input = await asyncio.to_thread(input, prompt)
+        return user_input.strip()
+
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
@@ -1033,13 +1038,6 @@ class COMMON():
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-                    if imdb != 0:
-                        imdb_str = str(f'tt{imdb}').zfill(7)
-                    else:
-                        imdb_str = None
-
-                    console.print(f"[green]Valid IDs found from {tracker}: TMDb: {tmdb}, IMDb: {imdb_str}, TVDb: {tvdb}, MAL: {mal}[/green]")
-
             if tmdb or imdb or tvdb:
                 if not id:
                     # Only prompt the user for ID selection if not searching by ID
@@ -1058,8 +1056,7 @@ class COMMON():
                     console.print(f"Extracted description: {description}", markup=False)
 
                     if meta.get('unattended') or (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')):
-                        meta['description'] = description
-                        meta['saved_description'] = True
+                        return tmdb, imdb, tvdb, mal, description, category, infohash, imagelist, file_name
                     else:
                         console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
                         edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
@@ -1068,16 +1065,11 @@ class COMMON():
                             edited_description = click.edit(description)
                             if edited_description:
                                 description = edited_description.strip()
-                            meta['description'] = description
-                            meta['saved_description'] = True
                         elif edit_choice.lower() == 'd':
                             description = None
-                            imagelist = []
                             console.print("[yellow]Description discarded.[/yellow]")
                         else:
                             console.print("[green]Keeping the original description.[/green]")
-                            meta['description'] = description
-                            meta['saved_description'] = True
                     if not meta.get('keep_images'):
                         imagelist = []
                 else:
@@ -1407,54 +1399,40 @@ class COMMON():
             bbcode_output += "\n"
             return bbcode_output
 
-    def get_version(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(os.path.dirname(current_dir))
-        version_file_path = os.path.join(project_root, 'data', 'version.py')
-        if not os.path.isfile(version_file_path):
-            return ''
-        try:
-            with open(version_file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
-            if match:
-                return match.group(1)
-        except OSError as e:
-            print(f"Error reading version file: {e}")
-            return ''
-
-        return ''
-
     async def get_bdmv_mediainfo(self, meta, remove=None):
         mediainfo = ''
         mi_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/MEDIAINFO_CLEANPATH.txt'
 
         if meta.get('is_disc') == 'BDMV':
-            path = meta['discs'][0]['playlists'][0]['path']
-            await exportInfo(
-                path,
-                False,
-                meta['uuid'],
-                meta['base_dir'],
-                export_text=True,
-                is_dvd=False,
-                debug=meta.get('debug', False)
-            )
+            if not os.path.isfile(mi_path):
+                if meta['debug']:
+                    console.print("[blue]Generating MediaInfo for BDMV...[/blue]")
+                path = meta['discs'][0]['playlists'][0]['path']
+                await exportInfo(
+                    path,
+                    False,
+                    meta['uuid'],
+                    meta['base_dir'],
+                    export_text=True,
+                    is_dvd=False,
+                    debug=meta.get('debug', False)
+                )
 
-            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
-                lines = await f.readlines()
+            else:
+                async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+                    lines = await f.readlines()
 
-            if remove:
-                if not isinstance(remove, list):
-                    lines_to_remove = [remove]
-                else:
-                    lines_to_remove = remove
+                if remove:
+                    if not isinstance(remove, list):
+                        lines_to_remove = [remove]
+                    else:
+                        lines_to_remove = remove
 
-                lines = [
-                    line for line in lines
-                    if not any(line.strip().startswith(prefix) for prefix in lines_to_remove)
-                ]
+                    lines = [
+                        line for line in lines
+                        if not any(line.strip().startswith(prefix) for prefix in lines_to_remove)
+                    ]
 
-            mediainfo = ''.join(lines) if remove else lines
+                mediainfo = ''.join(lines) if remove else lines
 
         return mediainfo

@@ -120,6 +120,7 @@ class Args():
         parser.add_argument('-sfxs', '--sfx-subtitles', dest='sfx_subtitles', action='store_true', required=False, help="Manually indicate whether subtitles with visual enhancements like animations, effects, or backgrounds are included")
         parser.add_argument('-e', '--extras', dest='extras', action='store_true', required=False, help="Indicates that extras are included. Mainly used for Blu-rays discs")
         parser.add_argument('-sort', '--sorted-filelist', dest='sorted_filelist', action='store_true', required=False, help="Use the largest video file for processing instead of the first video file found")
+        parser.add_argument('-sc', '--site-check', dest='site_check', action='store_true', required=False, help="If you have a matching torrent in your client for the -tk, it will quickly skip processing this content")
         parser.add_argument('-ptp', '--ptp', nargs=1, required=False, help="PTP torrent id/permalink", type=str)
         parser.add_argument('-blu', '--blu', nargs=1, required=False, help="BLU torrent id/link", type=str)
         parser.add_argument('-aither', '--aither', nargs=1, required=False, help="Aither torrent id/link", type=str)
@@ -140,8 +141,8 @@ class Args():
         parser.add_argument('-disctype', '--disctype', nargs=1, required=False, help="Type of disc for TIK (BD100, BD66, BD50, BD25, NTSC DVD9, NTSC DVD5, PAL DVD9, PAL DVD5, Custom, 3D)", type=str)
         parser.add_argument('--untouched', dest='untouched', action='store_true', required=False, help="Set when a completely untouched disc at TIK")
         parser.add_argument('-manual_dvds', '--manual_dvds', nargs=1, required=False, help="Override the default number of DVD's (eg: use 2xDVD9+DVD5 instead)", type=str, dest='manual_dvds', default="")
-        parser.add_argument('-pb', '--desclink', nargs=1, required=False, help="Custom Description (link to hastebin/pastebin)")
-        parser.add_argument('-df', '--descfile', nargs=1, required=False, help="Custom Description (path to file OR filename in current working directory)")
+        parser.add_argument('-pb', '--desclink', dest='description_link', nargs=1, required=False, help="Custom Description (link to hastebin/pastebin)")
+        parser.add_argument('-df', '--descfile', dest='description_file', nargs=1, required=False, help="Custom Description (path to file OR filename in current working directory)")
         parser.add_argument('-ih', '--imghost', nargs=1, required=False, help="Image Host", choices=['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'lensdump', 'ptscreens', 'onlyimage', 'dalexni', 'zipline', 'passtheimage'])
         parser.add_argument('-siu', '--skip-imagehost-upload', dest='skip_imghost_upload', action='store_true', required=False, help="Skip Uploading to an image host")
         parser.add_argument('-th', '--torrenthash', nargs=1, required=False, help="Torrent Hash to re-use from your client's session directory")
@@ -220,7 +221,7 @@ class Args():
                         meta['manual_type'] = value2.upper().replace('-', '')
                     elif key == 'tag':
                         meta[key] = f"-{value2}"
-                    elif key == 'descfile':
+                    elif key == 'description_file':
                         meta[key] = os.path.abspath(value2)
                     elif key == 'comparison':
                         meta[key] = os.path.abspath(value2)

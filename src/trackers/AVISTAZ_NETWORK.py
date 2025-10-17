@@ -1,3 +1,4 @@
+import aiofiles
 import asyncio
 import bbcode
 import bencodepy
@@ -12,6 +13,7 @@ import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
@@ -19,7 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 
-class AZTrackerBase():
+class AZTrackerBase:
     def __init__(self, config, tracker_name):
         self.config = config
         self.tracker = tracker_name
@@ -30,11 +32,9 @@ class AZTrackerBase():
         self.announce_url = tracker_config.get('announce_url')
         self.source_flag = tracker_config.get('source_flag')
 
-        self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = ''
         self.media_code = ''
 
     def get_resolution(self, meta):
@@ -89,18 +89,10 @@ class AZTrackerBase():
         else:
             return False
 
-        search_term = ''
         imdb_info = meta.get('imdb_info', {})
         imdb_id = imdb_info.get('imdbID') if isinstance(imdb_info, dict) else None
         tmdb_id = meta.get('tmdb')
         title = meta['title']
-
-        if imdb_id:
-            search_term = imdb_id
-        else:
-            search_term = title
-
-        ajax_url = f'{self.base_url}/ajax/movies/{category}?term={search_term}'
 
         headers = {
             'Referer': f"{self.base_url}/upload/{meta['category'].lower()}",
@@ -113,25 +105,32 @@ class AZTrackerBase():
                     console.print(f'{self.tracker}: Trying to search again by ID after adding to media to database...\n')
                     await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
-                response = await self.session.get(ajax_url, headers=headers)
-                response.raise_for_status()
-                data = response.json()
+                data = {}
 
-                if data.get('data'):
-                    match = None
-                    for item in data['data']:
-                        if imdb_id and item.get('imdb') == imdb_id:
-                            match = item
-                            break
-                        elif not imdb_id and item.get('tmdb') == str(tmdb_id):
-                            match = item
-                            break
+                if imdb_id:
+                    response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={imdb_id}', headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
 
-                    if match:
-                        self.media_code = str(match['id'])
-                        if attempt == 1:
-                            console.print(f"{self.tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
-                        return True
+                if not data.get('data', ''):
+                    response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={title}', headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+
+                match = None
+                for item in data.get('data', []):
+                    if imdb_id and item.get('imdb') == imdb_id:
+                        match = item
+                        break
+                    elif item.get('tmdb') == str(tmdb_id):
+                        match = item
+                        break
+
+                if match:
+                    self.media_code = str(match['id'])
+                    if attempt == 1:
+                        console.print(f"{self.tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
+                    return True
 
             except Exception as e:
                 console.print(f'{self.tracker}: Error while trying to fetch media code in attempt {attempt + 1}: {e}')
@@ -139,7 +138,7 @@ class AZTrackerBase():
 
             if attempt == 0 and not self.media_code:
                 console.print(f"\n{self.tracker}: The media [[yellow]IMDB:{imdb_id}[/yellow]] [[blue]TMDB:{tmdb_id}[/blue]] appears to be missing from the site's database.")
-                user_choice = input(f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
+                user_choice = await self.common.async_input(prompt=f"{self.tracker}: Do you want to add it to the site database? (y/n): \n")
 
                 if user_choice in ['y', 'yes']:
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
@@ -157,7 +156,7 @@ class AZTrackerBase():
 
     async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'type_id': category,
             'title': title,
             'imdb_id': imdb_id if imdb_id else '',
@@ -183,7 +182,13 @@ class AZTrackerBase():
                 return True
             else:
                 console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status_code}')
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]Failed_DB_attempt.html"
+                os.makedirs(os.path.dirname(failure_path), exist_ok=True)
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
+
         except Exception as e:
             console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
             return False
@@ -246,6 +251,9 @@ class AZTrackerBase():
         except httpx.RequestError as e:
             console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
             return False
+        except Exception as e:
+            console.print(f'{self.tracker}: Unexpected error validating credentials: {e}')
+            return False
 
     async def search_existing(self, meta, disctype):
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
@@ -253,7 +261,7 @@ class AZTrackerBase():
             if warnings:
                 console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red]\n\n{warnings}")
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    choice = input('Do you want to continue anyway? [y/N]: ').strip().lower()
+                    choice = await self.common.async_input(prompt='Do you want to continue anyway? [y/N]: ')
                     if choice != 'y':
                         meta['skipping'] = f'{self.tracker}'
                         return
@@ -405,7 +413,7 @@ class AZTrackerBase():
                 if missing_audio_languages:
                     console.print('No audio language/s found.')
                     console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
-                    user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
+                    user_input = await self.common.async_input(prompt='[bold yellow]Enter languages: [/bold yellow]')
 
                     langs = [lang.strip() for lang in user_input.split(',')]
                     for lang in langs:
@@ -438,7 +446,7 @@ class AZTrackerBase():
         }
 
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'qquuid': str(uuid.uuid4()),
             'qqfilename': filename,
             'qqtotalfilesize': str(len(image_bytes))
@@ -631,40 +639,35 @@ class AZTrackerBase():
         return tags
 
     async def edit_desc(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        description_parts = []
+        # TV stuff
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        if episode_overview:
+            desc_parts.append(f'[b]Episode:[/b] {title}')
+            desc_parts.append(f'[b]Overview:[/b] {episode_overview}')
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as file:
-                manual_desc = file.read()
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
 
-            if manual_desc:
-                console.print('\n[green]Found existing description:[/green]\n')
-                print(manual_desc)
-                user_input = input('Do you want to use this description? (y/n): ')
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
-                if user_input.lower() == 'y':
-                    description_parts.append(manual_desc)
-                    console.print('Using existing description.')
-                else:
-                    console.print('Ignoring existing description.')
-
-        raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
+        if not description:
+            return ''
 
         processed_desc, amount = re.subn(
             r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]',
             '',
-            raw_bbcode_desc,
+            description,
             flags=re.DOTALL
         )
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} NFO section(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} NFO section.')
 
         processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} Link(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} link(s).')
 
         bbcode_tags_pattern = r'\[/?(size|align|left|center|right|img|table|tr|td|spoiler|url)[^\]]*\]'
         processed_desc, amount = re.subn(
@@ -674,19 +677,19 @@ class AZTrackerBase():
             flags=re.IGNORECASE
         )
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} BBCode tag(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} BBCode tag(s).')
 
         final_html_desc = bbcode.render_html(processed_desc)
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(final_html_desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(final_html_desc)
 
         return final_html_desc
 
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
@@ -748,6 +751,9 @@ class AZTrackerBase():
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def edit_name(self, meta):
+        # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
+        # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
+        # https://privatehd.to/rules/upload-rules
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
 
         if self.tracker == 'PHD':
@@ -780,6 +786,7 @@ class AZTrackerBase():
                 upload_name = f'{upload_name}-NOGROUP'
 
         if meta['category'] == 'TV':
+            year_to_use = meta.get('year')
             if not meta.get('no_year', False) and not meta.get('search_year', ''):
                 season_int = meta.get('season_int', 0)
                 season_info = meta.get('imdb_info', {}).get('seasons_summary', [])
@@ -793,8 +800,26 @@ class AZTrackerBase():
                             break
 
                 # Use the season-specific year if found, otherwise fall back to meta year
-                year_to_use = season_year if season_year else meta.get('year')
-                upload_name = upload_name.replace(meta['title'], f"{meta['title']} {year_to_use}", 1)
+                if season_year:
+                    year_to_use = season_year
+                upload_name = upload_name.replace(
+                    meta['title'],
+                    f"{meta['title']} {year_to_use}",
+                    1
+                )
+
+            if self.tracker == 'PHD':
+                upload_name = upload_name.replace(
+                    str(year_to_use),
+                    ''
+                )
+
+            if self.tracker == 'AZ':
+                if meta.get('tv_pack', False):
+                    upload_name = upload_name.replace(
+                        f"{meta['title']} {year_to_use} {meta.get('season')}",
+                        f"{meta['title']} {meta.get('season')} {year_to_use}"
+                    )
 
         if meta.get('type', '') == 'DVDRIP':
             if meta.get('source', ''):

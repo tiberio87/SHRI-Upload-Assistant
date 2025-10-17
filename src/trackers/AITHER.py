@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+from src.console import console
 from src.languages import process_desc_language, has_english_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -22,6 +23,14 @@ class AITHER(UNIT3D):
         self.banned_groups = []
         pass
 
+    async def get_additional_checks(self, meta):
+        should_continue = True
+        if meta['valid_mi'] is False:
+            console.print("[bold red]No unique ID in mediainfo, skipping AITHER upload.")
+            return False
+
+        return should_continue
+
     async def get_additional_data(self, meta):
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
@@ -39,12 +48,13 @@ class AITHER(UNIT3D):
 
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
-        audio_languages = meta['audio_languages'][0].upper()
+        audio_languages = meta['audio_languages']
         if audio_languages and not await has_english_language(audio_languages):
+            foreign_lang = meta['audio_languages'][0].upper()
             if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
-                aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {audio_languages}", 1)
+                aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {foreign_lang}", 1)
             elif not meta.get('is_disc') == "BDMV":
-                aither_name = aither_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
+                aither_name = aither_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
 
         if name_type == "DVDRIP":
             source = "DVDRip"

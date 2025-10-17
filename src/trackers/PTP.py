@@ -1,26 +1,30 @@
-import cli_ui
-import requests
+import aiofiles
+import aiofiles.os
 import asyncio
-import re
-import os
-from pathlib import Path
-import json
+import cli_ui
+import click
 import glob
+import httpx
+import json
 import platform
 import pickle
-import click
-import httpx
+import os
+import re
+import requests
+
+from pathlib import Path
 from pymediainfo import MediaInfo
-from src.trackers.COMMON import COMMON
-from src.bbcode import BBCODE
-from src.exceptions import *  # noqa F403
-from src.console import console
 from torf import Torrent
+
 from cogs.redaction import redact_private_info
-from datetime import datetime
+from data.config import config
+from src.bbcode import BBCODE
+from src.console import console
+from src.exceptions import *  # noqa F403
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.torrentcreate import create_torrent
+from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
-from src.torrentcreate import CustomTorrent, torf_cb, create_torrent
 
 
 class PTP():
@@ -263,7 +267,51 @@ class PTP():
         await asyncio.sleep(1)
         try:
             response = response.json()
-            if response.get("Page") == "Browse":  # No Releases on Site with ID
+            if response.get('TotalResults'):  # Search results page
+                total_results = int(response.get('TotalResults', 0))
+                if total_results == 0:
+                    console.print(f"[yellow]No results found for IMDb: tt{imdb}[/yellow]")
+                    return None
+                elif total_results == 1:
+                    # Single result - use it
+                    movie = response.get('Movies', [{}])[0]
+                    groupID = movie.get('GroupId')
+                    title = movie.get('Title', 'Unknown')
+                    year = movie.get('Year', 'Unknown')
+                    console.print(f"[green]Found single match for IMDb: [yellow]tt{imdb}[/yellow] -> Group ID: [yellow]{groupID}[/yellow][/green]")
+                    console.print(f"[green]Title: [yellow]{title}[/yellow] ([yellow]{year}[/yellow])")
+                    return groupID
+                else:
+                    # Multiple results - let user choose
+                    console.print(f"[yellow]Found {total_results} matches for IMDb: tt{imdb}[/yellow]")
+                    movies = response.get('Movies', [])
+                    choices = []
+                    for i, movie in enumerate(movies):
+                        title = movie.get('Title', 'Unknown')
+                        year = movie.get('Year', 'Unknown')
+                        group_id = movie.get('GroupId', 'Unknown')
+                        choice_text = f"{title} ({year}) - Group ID: {group_id}"
+                        choices.append(choice_text)
+
+                    choices.append("Skip - Don't use any of these matches")
+
+                    try:
+                        selected = cli_ui.ask_choice("Select the correct movie:", choices=choices)
+                        if selected == "Skip - Don't use any of these matches":
+                            console.print("[yellow]User chose to skip all matches[/yellow]")
+                            return None
+
+                        selected_index = choices.index(selected)
+                        selected_movie = movies[selected_index]
+                        groupID = selected_movie.get('GroupId')
+
+                        console.print(f"[green]User selected: Group ID [yellow]{groupID}[/yellow][/green]")
+                        return groupID
+
+                    except (KeyboardInterrupt, cli_ui.Interrupted):
+                        console.print("[yellow]Selection cancelled by user[/yellow]")
+                        return None
+            elif response.get("Page") == "Browse":  # No Releases on Site with ID
                 return None
             elif response.get('Page') == "Details":  # Group Found
                 groupID = response.get('GroupId')
@@ -271,7 +319,7 @@ class PTP():
                 console.print(f"[green]Title: [yellow]{response.get('Name')}[/yellow] ([yellow]{response.get('Year')}[/yellow])")
                 return groupID
         except Exception:
-            console.print("[red]An error has occured trying to find a group ID")
+            console.print("[red]An error has occurred trying to find a group ID")
             console.print("[red]Please check that the site is online and your ApiUser/ApiKey values are correct")
             return None
 
@@ -669,8 +717,6 @@ class PTP():
         desc = desc.replace("[list]", "").replace("[/list]", "")
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
-        desc = desc.replace('[code', '[quote')
-        desc = desc.replace('[/code]', '[/quote]')
         desc = re.sub(r"\[img=[^\]]+\]", "[img]", desc)
         return desc
 
@@ -1311,7 +1357,6 @@ class PTP():
             data["imdb"] = "0"
         else:
             data["imdb"] = str(meta["imdb_id"]).zfill(7)
-
         if groupID is None:  # If need to make new group
             url = "https://passthepopcorn.me/upload.php"
             if data["imdb"] == '0':
@@ -1344,7 +1389,7 @@ class PTP():
                 if meta.get('mode', 'discord') == 'cli':
                     console.print('[yellow]Unable to match any tags')
                     console.print("Valid tags can be found on the PTP upload form")
-                    new_data["tags"] = console.input("Please enter at least one tag. Comma seperated (action, animation, short):")
+                    new_data["tags"] = console.input("Please enter at least one tag. Comma separated (action, animation, short):")
             data.update(new_data)
             if meta["imdb_info"].get("directors", None) is not None:
                 data["artist[]"] = tuple(meta['imdb_info'].get('directors'))
@@ -1356,56 +1401,26 @@ class PTP():
         return url, data
 
     async def upload(self, meta, url, data, disctype):
-        torrent_filename = f"[{self.tracker}].torrent"
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}"
-        torrent = Torrent.read(torrent_path)
+        common = COMMON(config=self.config)
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        if not await aiofiles.os.path.exists(torrent_file_path):
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
+
+        loop = asyncio.get_running_loop()
+        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
-            console.print("[red]Piece size is OVER 16M and does not work on PTP. Generating a new .torrent")
-            if meta.get('mkbrr', False):
-                from data.config import config
-                common = COMMON(config=self.config)
-                tracker_url = config['TRACKERS']['PTP'].get('announce_url', "https://fake.tracker").strip()
+            console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
+            tracker_url = config['TRACKERS']['PTP'].get('announce_url', "https://fake.tracker").strip()
+            meta['max_piece_size'] = '16'
+            torrent_create = f"[{self.tracker}]"
 
-                # Create the torrent with the tracker URL
-                torrent_create = f"[{self.tracker}]"
-                create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
-                torrent_filename = "[PTP]"
-
-                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
-            else:
-                if meta['is_disc']:
-                    include = []
-                    exclude = []
-                else:
-                    include = ["*.mkv", "*.mp4", "*.ts"]
-                    exclude = ["*.*", "*sample.mkv", "!sample*.*"]
-
-                new_torrent = CustomTorrent(
-                    meta=meta,
-                    path=Path(meta['path']),
-                    trackers=[self.announce_url],
-                    source="Audionut",
-                    private=True,
-                    exclude_globs=exclude,  # Ensure this is always a list
-                    include_globs=include,  # Ensure this is always a list
-                    creation_date=datetime.now(),
-                    comment="Created by Upload Assistant",
-                    created_by="Upload Assistant"
-                )
-
-                # Explicitly set the piece size and update metainfo
-                new_torrent.piece_size = 16777216  # 16 MiB in bytes
-                new_torrent.metainfo['info']['piece length'] = 16777216  # Ensure 'piece length' is set
-
-                # Validate and write the new torrent
-                new_torrent.validate_piece_size()
-                new_torrent.generate(callback=torf_cb, interval=5)
-                new_torrent.write(torrent_path, overwrite=True)
+            create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
         # Proceed with the upload process
-        with open(torrent_path, 'rb') as torrentFile:
+        with open(torrent_file_path, 'rb') as torrentFile:
             files = {
                 "file_input": ("placeholder.torrent", torrentFile, "application/x-bittorent")
             }

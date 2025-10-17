@@ -151,6 +151,11 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         if meta['debug']:
             console.print(f"[cyan]Collected frame information for {len(frame_info_results)} frames")
 
+    num_workers = min(num_screens, task_limit)
+
+    if meta['debug']:
+        console.print(f"Using {num_workers} worker(s) for {num_screens} image(s)")
+
     capture_tasks = []
     capture_results = []
     if use_vs:
@@ -163,8 +168,16 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             loglevel = 'quiet'
 
         existing_indices = {int(p.split('-')[-1].split('.')[0]) for p in existing_screens}
+
+        # Create semaphore to limit concurrent tasks
+        semaphore = asyncio.Semaphore(task_limit)
+
+        async def capture_disc_with_semaphore(*args):
+            async with semaphore:
+                return await capture_disc_task(*args)
+
         capture_tasks = [
-            capture_disc_task(
+            capture_disc_with_semaphore(
                 i,
                 file,
                 ss_times[i],
@@ -207,8 +220,6 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             return []
 
         # Dynamically determine the number of processes
-        num_tasks = len(valid_images)
-        num_workers = min(num_tasks, task_limit)
         if optimize_images:
             if meta['debug']:
                 console.print("[yellow]Now optimizing images...[/yellow]")
@@ -587,10 +598,22 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
             if meta['debug']:
                 console.print(f"[cyan]Collected frame information for {len(frame_info_results)} frames")
 
+        num_workers = min(num_screens + 1, task_limit)
+
+        if meta['debug']:
+            console.print(f"Using {num_workers} worker(s) for {num_screens} image(s)")
+
+        # Create semaphore to limit concurrent tasks
+        semaphore = asyncio.Semaphore(task_limit)
+
+        async def capture_dvd_with_semaphore(args):
+            async with semaphore:
+                return await capture_dvd_screenshot(args)
+
         for i in range(num_screens + 1):
             if not os.path.exists(image_paths[i]) or meta.get('retake', False):
                 capture_tasks.append(
-                    capture_dvd_screenshot(
+                    capture_dvd_with_semaphore(
                         (i, input_files[i], image_paths[i], ss_times[i], meta, width, height, w_sar, h_sar)
                     )
                 )
@@ -993,7 +1016,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
     meta['libplacebo'] = False
     if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr'] or "HLG" in meta['hdr']):
-        if use_libplacebo:
+        if use_libplacebo and not meta.get('frame_overlay', False):
             if not ffmpeg_is_good:
                 test_time = ss_times[0] if ss_times else 0
                 test_image = image_path if isinstance(image_path, str) else (
@@ -1031,13 +1054,20 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if meta['debug']:
         console.print(f"Using {num_workers} worker(s) for {num_capture} image(s)")
 
+    # Create semaphore to limit concurrent tasks
+    semaphore = asyncio.Semaphore(num_workers)
+
+    async def capture_with_semaphore(args):
+        async with semaphore:
+            return await capture_screenshot(args)
+
     capture_tasks = []
     for i in range(num_capture):
         image_index = existing_images_count + i
         image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{image_index}.png")
         if not os.path.exists(image_path) or meta.get('retake', False):
             capture_tasks.append(
-                capture_screenshot(  # Direct async function call
+                capture_with_semaphore(
                     (i, path, ss_times[i], image_path, width, height, w_sar, h_sar, loglevel, hdr_tonemap, meta)
                 )
             )
@@ -1328,13 +1358,15 @@ async def capture_screenshot(args):
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
             console.print(f"[cyan]Processing file: {path}[/cyan]")
 
-        if meta.get('frame_overlay', False):
+        if not meta.get('frame_overlay', False):
             # Warm-up (only for first screenshot index or if not warmed)
             if use_libplacebo:
                 warm_up = config['DEFAULT'].get('ffmpeg_warmup', False)
                 if warm_up:
+                    meta['_libplacebo_warmed'] = False
+                else:
                     meta['_libplacebo_warmed'] = True
-                elif "_libplacebo_warmed" not in meta:
+                if "_libplacebo_warmed" not in meta:
                     meta['_libplacebo_warmed'] = False
                 if hdr_tonemap and meta.get('libplacebo') and not meta.get('_libplacebo_warmed'):
                     await libplacebo_warmup(path, meta, loglevel)
@@ -1686,17 +1718,23 @@ async def worker_wrapper(image, optimize_image_task, executor):
 
 async def kill_all_child_processes():
     """Ensures all child processes (e.g., ProcessPoolExecutor workers) are terminated."""
-    current_process = psutil.Process()
-    children = current_process.children(recursive=True)  # Get child processes once
+    try:
+        current_process = psutil.Process()
+        children = current_process.children(recursive=True)  # Get child processes once
 
-    for child in children:
-        console.print(f"[red]Killing stuck worker process: {child.pid}[/red]")
-        child.terminate()
+        for child in children:
+            console.print(f"[red]Killing stuck worker process: {child.pid}[/red]")
+            child.terminate()
 
-    gone, still_alive = psutil.wait_procs(children, timeout=3)  # Wait for termination
-    for process in still_alive:
-        console.print(f"[red]Force killing stubborn process: {process.pid}[/red]")
-        process.kill()
+        gone, still_alive = psutil.wait_procs(children, timeout=3)  # Wait for termination
+        for process in still_alive:
+            console.print(f"[red]Force killing stubborn process: {process.pid}[/red]")
+            process.kill()
+    except (psutil.AccessDenied, PermissionError) as e:
+        # Handle restricted environments like Termux/Android where /proc/stat is inaccessible
+        console.print(f"[yellow]Warning: Unable to access process information (restricted environment): {e}[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Error during child process cleanup: {e}[/yellow]")
 
 
 def optimize_image_task(image):
@@ -1731,9 +1769,10 @@ async def get_frame_info(path, ss_time, meta):
     """Get frame information (type, exact timestamp) for a specific frame"""
     try:
         info_ff = ffmpeg.input(path, ss=ss_time)
+        # Use video stream selector and apply showinfo filter
+        filtered = info_ff['v:0'].filter('showinfo')
         info_command = (
-            info_ff
-            .filter('showinfo')
+            filtered
             .output('-', format='null', vframes=1)
             .global_args('-loglevel', 'info')
         )

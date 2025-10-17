@@ -1,15 +1,17 @@
-from src.console import console
-from src.trackers.COMMON import COMMON
-from data.config import config
 import aiohttp
 import asyncio
-import sys
-from PIL import Image
+import click
 import io
 from io import BytesIO
 import os
-import click
+import sys
+
+from PIL import Image
+
+from data.config import config
 from src.btnid import get_bhd_torrents
+from src.console import console
+from src.trackers.COMMON import COMMON
 
 # Define expected amount of screenshots from the config
 expected_images = int(config['DEFAULT']['screens'])
@@ -73,7 +75,7 @@ async def check_images_concurrently(imagelist, meta):
     # Function to check each image's URL, host, and log resolution
     save_directory = f"{meta['base_dir']}/tmp/{meta['uuid']}"
 
-    timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_connect=10, sock_read=10)
+    timeout = aiohttp.ClientTimeout(total=15, connect=5, sock_connect=5, sock_read=5)
 
     async def check_and_collect(image_dict):
         img_url = image_dict.get('raw_url')
@@ -217,7 +219,6 @@ async def check_image_link(url, timeout=None):
 async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id=False):
     # Unpack the expected 9 elements, ignoring any additional ones
     tmdb, imdb, tvdb, mal, desc, category, infohash, imagelist, filename, *rest = tracker_data
-
     if tmdb:
         meta['tmdb_id'] = tmdb
         if meta['debug']:
@@ -236,6 +237,7 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
             console.print("set MAL ID:", meta['mal_id'])
     if desc and not only_id:
         meta['description'] = desc
+        meta['saved_description'] = True
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
             if len(desc) > 0:
                 description.write((desc or "") + "\n")
@@ -248,20 +250,20 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
         if meta['debug']:
             console.print("set Category:", meta['category'])
 
-    if not meta.get('image_list'):  # Only handle images if image_list is not already populated
-        if imagelist:  # Ensure imagelist is not empty before setting
-            valid_images = await check_images_concurrently(imagelist, meta)
-            if valid_images:
-                meta['image_list'] = valid_images
-                if meta.get('image_list'):  # Double-check if image_list is set before handling it
-                    if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')) or meta['unattended']:
-                        await handle_image_list(meta, tracker_name, valid_images)
+    if imagelist:  # Ensure imagelist is not empty before setting
+        valid_images = await check_images_concurrently(imagelist, meta)
+        if valid_images:
+            meta['image_list'] = valid_images
+            if meta.get('image_list'):  # Double-check if image_list is set before handling it
+                if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')) or meta['unattended']:
+                    await handle_image_list(meta, tracker_name, valid_images)
 
     if filename:
         meta[f'{tracker_name.lower()}_filename'] = filename
 
     if meta['debug']:
         console.print(f"[green]{tracker_name} data successfully updated in meta[/green]")
+    return True
 
 
 async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, search_term, search_file_folder, only_id=False):
@@ -361,20 +363,20 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                           meta.get('isdir') is True)
 
         if meta.get('bhd'):
-            await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, torrent_id=meta['bhd'])
+            imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, torrent_id=meta['bhd'])
         elif use_foldername:
             # Use folder name from path if available, fall back to UUID
             folder_path = meta.get('path', '')
             foldername = os.path.basename(folder_path) if folder_path else meta.get('uuid', '')
-            await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, foldername=foldername)
+            imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, foldername=foldername)
         else:
             # Only use filename if none of the folder conditions are met
             filename = os.path.basename(meta['filelist'][0]) if meta.get('filelist') else None
-            await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, filename=filename)
+            imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, filename=filename)
 
-        if meta.get('imdb_id') or meta.get('tmdb_id'):
+        if imdb or tmdb:
             if not meta['unattended']:
-                console.print(f"[green]{tracker_name} data found: IMDb ID: {meta.get('imdb_id')}, TMDb ID: {meta.get('tmdb_id')}[/green]")
+                console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TMDb ID: {tmdb}[/green]")
                 if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
                     found_match = True
                     if meta.get('description') and meta.get('description') != "":
@@ -455,8 +457,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 else:
                     console.print(f"[yellow]{tracker_name} data discarded.[/yellow]")
                     meta[tracker_key] = None
-                    meta['imdb_id'] = 0
-                    meta['tmdb_id'] = 0
+                    meta['imdb_id'] = meta.get('imdb_id') if meta.get('imdb_id') else 0
+                    meta['tmdb_id'] = meta.get('tmdb_id') if meta.get('tmdb_id') else 0
                     meta["framestor"] = False
                     meta["flux"] = False
                     meta["description"] = ""
@@ -509,9 +511,12 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
 
         if any(item not in [None, 0] for item in tracker_data[:3]):  # Check for valid tmdb, imdb, or tvdb
             if meta['debug']:
-                console.print(f"[green]Valid data found on {tracker_name}, setting meta values[/green]")
-            await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
-            found_match = True
+                console.print(f"[green]Valid data found on {tracker_name}[/green]")
+            selected = await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
+            if selected:
+                found_match = True
+            else:
+                found_match = False
         else:
             if meta['debug']:
                 console.print(f"[yellow]No valid data found on {tracker_name}[/yellow]")
