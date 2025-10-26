@@ -481,11 +481,11 @@ class SHRI(UNIT3D):
                 if "core 118" in encoded_library or "core 148" in encoded_library:
                     return "WEBDL"
 
-            # Priority 4: BluRay empty metadata indicates GPU encode
+            # Priority 4: BluRay encoding detection
             if any(s in ("BLURAY", "BLU-RAY") for s in source):
-                bit_depth = video_track.get("BitDepth")
-                chroma = video_track.get("ChromaSubsampling")
-                if isinstance(bit_depth, dict) and isinstance(chroma, dict):
+                if isinstance(video_track.get("BitDepth"), dict):
+                    return "ENCODE"
+                if has_settings or has_library:
                     return "ENCODE"
 
             # Priority 5: Encoding tools (source-aware)
@@ -506,6 +506,10 @@ class SHRI(UNIT3D):
 
             # Priority 6: No encoding + WEB = WEB-DL
             if any("WEB" in s for s in source):
+                return "WEBDL"
+
+            # Priority 6.5: Service override for misdetected source
+            if service and service not in ("", "NONE"):
                 return "WEBDL"
 
             # Priority 7: No encoding + disc = REMUX
