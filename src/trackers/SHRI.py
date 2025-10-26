@@ -526,6 +526,11 @@ class SHRI(UNIT3D):
             if any(s in ("BLURAY", "BLU-RAY", "HDDVD") for s in source):
                 return "REMUX"
 
+            # DVD REMUX detection
+            if any(s in ("NTSC", "PAL", "NTSC DVD", "PAL DVD", "DVD") for s in source):
+                if not has_settings and not has_library:
+                    return "REMUX"
+
         except (IndexError, KeyError):
             # Fallback on mediainfo parsing errors
             pass
