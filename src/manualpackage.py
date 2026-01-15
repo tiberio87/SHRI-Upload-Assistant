@@ -74,7 +74,7 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
                 generic.write(f"{each['img_url']}\n")
     title = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", meta['title'])
     archive = f"{meta['base_dir']}/tmp/{meta['uuid']}/{title}"
-    torrent_files = glob.glob("*.torrent", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
+    torrent_files = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", "*.torrent"))]
     if isinstance(torrent_files, list) and len(torrent_files) > 1:
         for each in torrent_files:
             if not each.startswith(('BASE', '[RAND')):

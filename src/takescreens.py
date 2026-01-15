@@ -605,7 +605,7 @@ async def dvd_screenshots(
         if capture_results and len(capture_results) > num_screens:
             smallest = None
             smallest_size = float('inf')
-            for screens in glob.glob(f"{meta['discs'][disc_num]['name']}-*", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}/"):
+            for screens in [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/", f"{meta['discs'][disc_num]['name']}-*"))]:
                 screen_path = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/", screens)
                 try:
                     screen_size = os.path.getsize(screen_path)

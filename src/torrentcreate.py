@@ -196,7 +196,7 @@ async def create_torrent(
                 elif not meta.get('tv_pack', False):
                     path_dir = os.fspath(path)
                     os.chdir(path_dir)
-                    globs = glob.glob("*.mkv", root_dir=path_dir) + glob.glob("*.mp4", root_dir=path_dir) + glob.glob("*.ts", root_dir=path_dir)
+                    globs = [os.path.basename(f) for f in glob.glob(os.path.join(path_dir, "*.mkv"))] + [os.path.basename(f) for f in glob.glob(os.path.join(path_dir, "*.mp4"))] + [os.path.basename(f) for f in glob.glob(os.path.join(path_dir, "*.ts"))]
                     no_sample_globs = [
                         os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
                         if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()

@@ -814,9 +814,9 @@ class DescriptionBuilder:
                             desc_parts.append("[/center]\n\n")
                             meta["retry_count"] += 1
                             meta[new_images_key] = []
-                            new_screens = glob.glob(
-                                f"PLAYLIST_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                            )
+                            new_screens = [os.path.basename(f) for f in glob.glob(
+                                os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
+                            )]
                             if not new_screens:
                                 use_vs = meta.get("vapoursynth", False)
                                 try:
@@ -834,9 +834,9 @@ class DescriptionBuilder:
                                     )
                                 except Exception as e:
                                     print(f"Error during BDMV screenshot capture: {e}")
-                                new_screens = glob.glob(
-                                    f"PLAYLIST_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                                )
+                                new_screens = [os.path.basename(f) for f in glob.glob(
+                                    os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
+                                )]
                             if new_screens and not meta.get("skip_imghost_upload", False):
                                 uploaded_images, _ = await upload_screens(
                                     meta,
@@ -991,13 +991,13 @@ class DescriptionBuilder:
                             desc_parts.append("[/center]\n\n")
                             # Check if new screenshots already exist before running prep.screenshots
                             if each["type"] == "BDMV":
-                                new_screens = glob.glob(
-                                    f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                                )
+                                new_screens = [os.path.basename(f) for f in glob.glob(
+                                    os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
+                                )]
                             elif each["type"] == "DVD":
-                                new_screens = glob.glob(
-                                    f"{meta['discs'][i]['name']}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                                )
+                                new_screens = [os.path.basename(f) for f in glob.glob(
+                                    os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
+                                )]
                             if not new_screens:
                                 if meta["debug"]:
                                     console.print(
@@ -1021,17 +1021,17 @@ class DescriptionBuilder:
                                         )
                                     except Exception as e:
                                         print(f"Error during BDMV screenshot capture: {e}")
-                                    new_screens = glob.glob(
-                                        f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                                    )
+                                    new_screens = [os.path.basename(f) for f in glob.glob(
+                                        os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
+                                    )]
                                 if each["type"] == "DVD":
                                     try:
                                         await dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during DVD screenshot capture: {e}")
-                                    new_screens = glob.glob(
-                                        f"{meta['discs'][i]['name']}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                                    )
+                                    new_screens = [os.path.basename(f) for f in glob.glob(
+                                        os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
+                                    )]
 
                             if new_screens and not meta.get("skip_imghost_upload", False):
                                 uploaded_images, _ = await upload_screens(
@@ -1168,7 +1168,7 @@ class DescriptionBuilder:
                     if new_images_key not in meta or not meta[new_images_key]:
                         meta[new_images_key] = []
                         # Proceed with image generation if not already present
-                        new_screens = glob.glob(f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
+                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 
                         # If no screenshots exist, create them
                         if not new_screens:
@@ -1190,7 +1190,7 @@ class DescriptionBuilder:
                         except Exception as e:
                             print(f"Error during generic screenshot capture: {e}")
 
-                        new_screens = glob.glob(f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
+                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 
                         # Upload generated screenshots
                         if new_screens and not meta.get("skip_imghost_upload", False):
