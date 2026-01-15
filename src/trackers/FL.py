@@ -354,7 +354,7 @@ class FL():
                 }
                 if int(meta['imdb_id']) != 0:
                     data['imdbURL'] = f"tt{meta['imdb_id']}"
-                screen_glob = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['filename']}-*.png")
+                screen_glob = glob.glob(f"{meta['filename']}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                 files = []
                 for screen in screen_glob:
                     files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
@@ -369,7 +369,7 @@ class FL():
                     final_desc += "[/pre][/quote]\n"  # Closed bbcode tags
                     # Upload screens and append to the end of the description
                     url = "https://up.img4k.net/api/description"
-                    screen_glob = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['filename']}-*.png")
+                    screen_glob = glob.glob(f"{meta['filename']}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                     files = []
                     for screen in screen_glob:
                         files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))

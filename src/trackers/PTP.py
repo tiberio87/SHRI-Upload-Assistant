@@ -912,14 +912,14 @@ class PTP():
                             desc.write(f"[mediainfo]{summary}[/mediainfo]\n\n")
                             meta['retry_count'] += 1
                             meta[new_images_key] = []
-                            new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
+                            new_screens = glob.glob(f"PLAYLIST_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                             if not new_screens:
                                 use_vs = meta.get('vapoursynth', False)
                                 try:
                                     await disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
                                 except Exception as e:
                                     print(f"Error during BDMV screenshot capture: {e}")
-                                new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
+                                new_screens = glob.glob(f"PLAYLIST_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                             if new_screens and not meta.get('skip_imghost_upload', False):
                                 uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
@@ -992,13 +992,13 @@ class PTP():
                             else:
                                 meta['retry_count'] += 1
                                 meta[new_images_key] = []
-                                new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
+                                new_screens = glob.glob(f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                                 if not new_screens:
                                     try:
                                         await disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during BDMV screenshot capture: {e}")
-                                new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
+                                new_screens = glob.glob(f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                                 if new_screens and not meta.get('skip_imghost_upload', False):
                                     uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
@@ -1060,7 +1060,7 @@ class PTP():
                             else:
                                 meta['retry_count'] += 1
                                 meta[new_images_key] = []
-                                new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
+                                new_screens = glob.glob(f"{meta['discs'][i]['name']}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                                 if not new_screens:
                                     try:
                                         await dvd_screenshots(
@@ -1068,7 +1068,7 @@ class PTP():
                                         )
                                     except Exception as e:
                                         print(f"Error during DVD screenshot capture: {e}")
-                                new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
+                                new_screens = glob.glob(f"{meta['discs'][i]['name']}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                                 if new_screens and not meta.get('skip_imghost_upload', False):
                                     uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
@@ -1190,14 +1190,14 @@ class PTP():
                         else:
                             meta['retry_count'] = meta.get('retry_count', 0) + 1
                             meta[new_images_key] = []
-                            new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
+                            new_screens = glob.glob(f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                             if not new_screens:
                                 try:
                                     await screenshots(
                                         file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, "")
                                 except Exception as e:
                                     print(f"Error during generic screenshot capture: {e}")
-                            new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
+                            new_screens = glob.glob(f"FILE_{i}-*.png", root_dir=f"{meta['base_dir']}/tmp/{meta['uuid']}")
                             if new_screens and not meta.get('skip_imghost_upload', False):
                                 uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):

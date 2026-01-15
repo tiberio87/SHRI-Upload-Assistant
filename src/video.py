@@ -148,7 +148,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
     filelist = []
     videoloc = os.path.abspath(videoloc)
     if os.path.isdir(videoloc):
-        globlist = glob.glob1(videoloc, "*.mkv") + glob.glob1(videoloc, "*.mp4") + glob.glob1(videoloc, "*.ts")
+        globlist = glob.glob("*.mkv", root_dir=videoloc) + glob.glob("*.mp4", root_dir=videoloc) + glob.glob("*.ts", root_dir=videoloc)
         for file in globlist:
             if not file.lower().endswith('sample.mkv') or "!sample" in file.lower():
                 filelist.append(os.path.abspath(f"{videoloc}{os.sep}{file}"))
