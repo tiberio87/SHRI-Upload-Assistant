@@ -47,64 +47,93 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         # Install code analysis tools
-        pip install mypy bandit vulture pycodestyle autopep8
+        pip install pyright bandit vulture pycodestyle autopep8 ruff
 
-    - name: Python Syntax Check
-      run: |
-        echo "Checking Python syntax errors..."
-        python -m py_compile $(find . -name "*.py" -not -path "./venv/*" -not -path "./.venv/*" -not -path "./env/*")
-
-    - name: Import Analysis
-      run: |
-        echo "Checking for import errors..."
-        python -c "
-        import os
-        import sys
-        import importlib.util
-        
-        errors = []
-        for root, dirs, files in os.walk('.'):
-            # Skip virtual environments and cache directories
-            dirs[:] = [d for d in dirs if d not in ['.git', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env']]
-            
-            for file in files:
-                if file.endswith('.py'):
-                    filepath = os.path.join(root, file)
-                    try:
-                        spec = importlib.util.spec_from_file_location('module', filepath)
-                        if spec and spec.loader:
-                            module = importlib.util.module_from_spec(spec)
-                            # Just validate the module can be created, don't execute
-                            pass
-                    except SyntaxError as e:
-                        errors.append(f'Syntax Error in {filepath}: {e}')
-                    except Exception as e:
-                        errors.append(f'Import Error in {filepath}: {e}')
-        
-        if errors:
-            for error in errors:
-                print(error)
-            sys.exit(1)
-        else:
-            print('All Python files have valid syntax and imports')
-        "
-
-    - name: Type Checking with MyPy
+    - name: Deprecation Warnings Scan
       continue-on-error: true
       run: |
-        echo "Running type checking for Python ${{ matrix.python-version }}..."
-        # Override python_version in mypy to match the matrix version
-        mypy --config-file mypy.ini --python-version ${{ matrix.python-version }} . > mypy-results-${{ matrix.python-version }}.txt 2>&1 || echo "MyPy scan completed with results saved"
-        
-        # Display results
-        cat mypy-results-${{ matrix.python-version }}.txt
+        python - <<'PY'
+        import re
+        import warnings
+        from pathlib import Path
+        import importlib.util
 
-    - name: Upload MyPy Results
+        warnings.simplefilter('default', DeprecationWarning)
+        warnings.simplefilter('default', PendingDeprecationWarning)
+
+        captured = []
+
+        def record_warning(message, category, filename, lineno, file=None, line=None):
+            captured.append(f"{category.__name__}: {message} ({filename}:{lineno})")
+
+        warnings.showwarning = record_warning
+
+        exclude_dirs = {'.git', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env', 'tmp', 'tests', 'bin'}
+        roots = [Path('src'), Path('web_ui'), Path('cogs')]
+        files = []
+
+        for root in roots:
+            if root.exists():
+                for path in root.rglob('*.py'):
+                    if not any(part in exclude_dirs for part in path.parts):
+                        files.append(path)
+
+        files.extend([p for p in Path('.').glob('*.py') if p.is_file()])
+
+        def module_name_from_path(path: Path) -> str:
+            sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', path.as_posix())
+            return f"deprecation_scan_{sanitized}"
+
+        for path in sorted(set(files)):
+            try:
+                spec = importlib.util.spec_from_file_location(module_name_from_path(path), path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+            except Exception:
+                # Ignore import/runtime errors during deprecation scanning
+                continue
+
+        with open('deprecation-warnings.txt', 'w', encoding='utf-8') as f:
+            if captured:
+                f.write('\n'.join(captured))
+        PY
+
+    - name: Ruff Lint
+      run: |
+        ruff check . > ruff-results-${{ matrix.python-version }}.txt 2>&1
+        cat ruff-results-${{ matrix.python-version }}.txt
+
+    - name: Upload Deprecation Warnings
       if: github.event_name == 'pull_request_target'
       uses: actions/upload-artifact@v4
       with:
-        name: mypy-results-${{ matrix.python-version }}
-        path: mypy-results-${{ matrix.python-version }}.txt
+        name: deprecation-warnings-${{ matrix.python-version }}
+        path: deprecation-warnings.txt
+
+    - name: Upload Ruff Results
+      if: github.event_name == 'pull_request_target'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ruff-results-${{ matrix.python-version }}
+        path: ruff-results-${{ matrix.python-version }}.txt
+
+    - name: Type Checking with Pyright
+      continue-on-error: true
+      run: |
+        echo "Running type checking for Python ${{ matrix.python-version }}..."
+        # Override pythonVersion in Pyright to match the matrix version
+        pyright --pythonversion ${{ matrix.python-version }} . > pyright-results-${{ matrix.python-version }}.txt 2>&1 || echo "Pyright scan completed with results saved"
+        
+        # Display results
+        cat pyright-results-${{ matrix.python-version }}.txt
+
+    - name: Upload Pyright Results
+      if: github.event_name == 'pull_request_target'
+      uses: actions/upload-artifact@v4
+      with:
+        name: pyright-results-${{ matrix.python-version }}
+        path: pyright-results-${{ matrix.python-version }}.txt
 
     - name: Security Analysis with Bandit
       continue-on-error: false
@@ -188,8 +217,8 @@ jobs:
     - name: Analysis Summary
       run: |
         echo "Python Code Analysis Summary:"
-        echo "✅ Syntax checking completed"
-        echo "✅ Import validation completed"
+        echo "✅ Ruff lint completed"
+        echo "✅ Deprecation warnings scan completed"
         echo "✅ Type checking completed"
         echo "✅ Security analysis with Bandit completed"
         echo "✅ Dependency security check with Safety completed"
@@ -229,10 +258,22 @@ jobs:
         pattern: safety-results-*
         merge-multiple: true
         
-    - name: Download MyPy Results
+    - name: Download Pyright Results
       uses: actions/download-artifact@v4
       with:
-        pattern: mypy-results-*
+        pattern: pyright-results-*
+        merge-multiple: true
+
+    - name: Download Ruff Results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ruff-results-*
+        merge-multiple: true
+
+    - name: Download Deprecation Warnings
+      uses: actions/download-artifact@v4
+      with:
+        pattern: deprecation-warnings-*
         merge-multiple: true
         
     - name: Post Bandit Results to PR
@@ -371,26 +412,26 @@ jobs:
             }
           }
           
-          // Check for mypy results files (one per Python version)
+          // Check for pyright results files (one per Python version)
           // Collect results per version, then deduplicate identical outputs
-          let mypyResults = '';
-          const mypyFiles = fs.readdirSync('.').filter(f => f.startsWith('mypy-results-') && f.endsWith('.txt'));
+          let pyrightResults = '';
+          const pyrightFiles = fs.readdirSync('.').filter(f => f.startsWith('pyright-results-') && f.endsWith('.txt'));
           
           // Map: content -> [versions]
-          const mypyByContent = new Map();
+          const pyrightByContent = new Map();
           
-          if (mypyFiles.length > 0) {
-            for (const file of mypyFiles) {
+          if (pyrightFiles.length > 0) {
+            for (const file of pyrightFiles) {
               try {
                 const content = fs.readFileSync(file, 'utf8').trim();
                 if (content) {
-                  // Extract version from filename (e.g., mypy-results-3.9.txt -> 3.9)
-                  const version = file.replace('mypy-results-', '').replace('.txt', '');
-                  if (!mypyByContent.has(content)) {
-                    mypyByContent.set(content, []);
+                  // Extract version from filename (e.g., pyright-results-3.9.txt -> 3.9)
+                  const version = file.replace('pyright-results-', '').replace('.txt', '');
+                  if (!pyrightByContent.has(content)) {
+                    pyrightByContent.set(content, []);
                   }
-                  mypyByContent.get(content).push(version);
-                  console.log(`Found MyPy results for Python ${version}`);
+                  pyrightByContent.get(content).push(version);
+                  console.log(`Found Pyright results for Python ${version}`);
                 }
               } catch (error) {
                 console.log(`Error reading ${file}: ${error.message}`);
@@ -398,8 +439,8 @@ jobs:
             }
           } else {
             // Fallback: look for individual result directories
-            console.log('No MyPy result files found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('mypy-results-'));
+            console.log('No Pyright result files found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('pyright-results-'));
             
             for (const item of items) {
               try {
@@ -412,36 +453,159 @@ jobs:
                     const filePath = path.join(itemPath, file);
                     const content = fs.readFileSync(filePath, 'utf8').trim();
                     if (content) {
-                      const version = item.replace('mypy-results-', '');
-                      if (!mypyByContent.has(content)) {
-                        mypyByContent.set(content, []);
+                      const version = item.replace('pyright-results-', '');
+                      if (!pyrightByContent.has(content)) {
+                        pyrightByContent.set(content, []);
                       }
-                      mypyByContent.get(content).push(version);
-                      console.log(`Found MyPy results in ${item}/${file}`);
+                      pyrightByContent.get(content).push(version);
+                      console.log(`Found Pyright results in ${item}/${file}`);
                     }
                   }
                 }
               } catch (error) {
-                console.log(`Error reading MyPy ${item}: ${error.message}`);
+                console.log(`Error reading Pyright ${item}: ${error.message}`);
               }
             }
           }
           
-          // Build deduplicated mypy output
-          for (const [content, versions] of mypyByContent.entries()) {
+          // Build deduplicated pyright output
+          for (const [content, versions] of pyrightByContent.entries()) {
             // Sort versions for consistent display
             versions.sort((a, b) => parseFloat(a) - parseFloat(b));
             if (versions.length === 1) {
-              mypyResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+              pyrightResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
             } else {
-              mypyResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+              pyrightResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+            }
+          }
+
+          // Check for ruff results files (one per Python version)
+          // Collect results per version, then deduplicate identical outputs
+          let ruffResults = '';
+          const ruffFiles = fs.readdirSync('.').filter(f => f.startsWith('ruff-results-') && f.endsWith('.txt'));
+          const ruffByContent = new Map();
+
+          if (ruffFiles.length > 0) {
+            for (const file of ruffFiles) {
+              try {
+                const content = fs.readFileSync(file, 'utf8').trim();
+                if (content) {
+                  const version = file.replace('ruff-results-', '').replace('.txt', '');
+                  if (!ruffByContent.has(content)) {
+                    ruffByContent.set(content, []);
+                  }
+                  ruffByContent.get(content).push(version);
+                  console.log(`Found Ruff results for Python ${version}`);
+                }
+              } catch (error) {
+                console.log(`Error reading ${file}: ${error.message}`);
+              }
+            }
+          } else {
+            console.log('No Ruff result files found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('ruff-results-'));
+
+            for (const item of items) {
+              try {
+                const itemPath = path.join('.', item);
+                const stat = fs.statSync(itemPath);
+
+                if (stat.isDirectory()) {
+                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
+                  for (const file of dirFiles) {
+                    const filePath = path.join(itemPath, file);
+                    const content = fs.readFileSync(filePath, 'utf8').trim();
+                    if (content) {
+                      const version = item.replace('ruff-results-', '');
+                      if (!ruffByContent.has(content)) {
+                        ruffByContent.set(content, []);
+                      }
+                      ruffByContent.get(content).push(version);
+                      console.log(`Found Ruff results in ${item}/${file}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.log(`Error reading Ruff ${item}: ${error.message}`);
+              }
+            }
+          }
+
+          for (const [content, versions] of ruffByContent.entries()) {
+            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+            if (versions.length === 1) {
+              ruffResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+            } else {
+              ruffResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+            }
+          }
+
+          // Check for deprecation warnings (one per Python version)
+          let deprecationResults = '';
+          const deprecationFiles = fs.readdirSync('.').filter(f => f.startsWith('deprecation-warnings-') && f.endsWith('.txt'));
+          const deprecationByContent = new Map();
+
+          if (deprecationFiles.length > 0) {
+            for (const file of deprecationFiles) {
+              try {
+                const content = fs.readFileSync(file, 'utf8').trim();
+                if (content) {
+                  const version = file.replace('deprecation-warnings-', '').replace('.txt', '');
+                  if (!deprecationByContent.has(content)) {
+                    deprecationByContent.set(content, []);
+                  }
+                  deprecationByContent.get(content).push(version);
+                  console.log(`Found deprecation warnings for Python ${version}`);
+                }
+              } catch (error) {
+                console.log(`Error reading ${file}: ${error.message}`);
+              }
+            }
+          } else {
+            console.log('No deprecation warning files found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('deprecation-warnings-'));
+
+            for (const item of items) {
+              try {
+                const itemPath = path.join('.', item);
+                const stat = fs.statSync(itemPath);
+
+                if (stat.isDirectory()) {
+                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
+                  for (const file of dirFiles) {
+                    const filePath = path.join(itemPath, file);
+                    const content = fs.readFileSync(filePath, 'utf8').trim();
+                    if (content) {
+                      const version = item.replace('deprecation-warnings-', '');
+                      if (!deprecationByContent.has(content)) {
+                        deprecationByContent.set(content, []);
+                      }
+                      deprecationByContent.get(content).push(version);
+                      console.log(`Found deprecation warnings in ${item}/${file}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.log(`Error reading deprecation warnings ${item}: ${error.message}`);
+              }
+            }
+          }
+
+          for (const [content, versions] of deprecationByContent.entries()) {
+            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+            if (versions.length === 1) {
+              deprecationResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+            } else {
+              deprecationResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
             }
           }
           
           banditResults = banditResults.trim();
           vultureResults = vultureResults.trim();
           safetyResults = safetyResults.trim();
-          mypyResults = mypyResults.trim();
+          pyrightResults = pyrightResults.trim();
+          ruffResults = ruffResults.trim();
+          deprecationResults = deprecationResults.trim();
           
           // Filter out manager warnings about test comments from Bandit results
           let cleanBanditResults = '';
@@ -455,18 +619,28 @@ jobs:
           const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
           const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
           const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
-          const hasMyPyIssues = mypyResults && !mypyResults.includes('Success: no issues found') && mypyResults.trim() !== '';
+          const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
+          const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
+          const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
           
-          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasMyPyIssues) {
-            console.log('No security, dead code, dependency, or type issues found, skipping PR comment.');
+          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
+            console.log('No security, dead code, dependency, type issues, lint issues, or deprecation warnings found, skipping PR comment.');
             return;
           }
           
           // Build the comment body
           let body = '## 🔍 Code Analysis Results\n\n';
           
-          if (hasMyPyIssues) {
-            body += '### 🔍 MyPy Type Checking\n\n```\n' + mypyResults + '\n```\n\n';
+          if (hasPyrightIssues) {
+            body += '### 🔍 Pyright Type Checking\n\n```\n' + pyrightResults + '\n```\n\n';
+          }
+
+          if (hasRuffIssues) {
+            body += '### 🧹 Ruff Lint\n\n```\n' + ruffResults + '\n```\n\n';
+          }
+
+          if (hasDeprecationWarnings) {
+            body += '### ⚠️ Deprecation Warnings (Runtime)\n\n```\n' + deprecationResults + '\n```\n\n';
           }
           
           if (hasBanditIssues) {
