@@ -281,7 +281,15 @@ class DescriptionBuilder:
             if overview:
                 overview = html_to_bbcode(overview)
 
-            episode_title = meta.get("auto_episode_title") or tvmaze_episode_data.get("episode_name", "")
+            episode_name = tvmaze_episode_data.get("episode_name", "")
+            episode_title = meta.get("auto_episode_title") or (
+                episode_name
+                if (
+                    "episode" not in episode_name.lower()
+                    and "tba" not in episode_name.lower()
+                )
+                else ""
+            )
 
             image = ""
             if meta.get("tv_pack", False):
