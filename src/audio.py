@@ -205,6 +205,7 @@ async def _get_audio_v2(
     dual = ""
     has_commentary = False
     meta['bloated'] = False
+    is_auro3d = False
     bd_mi = None
     additional: Any = ""
     format: Any = ""
@@ -309,6 +310,13 @@ async def _get_audio_v2(
                     console.print(f"DEBUG: Original Language: {orig_lang}")
                 try:
                     tracks = cast(list[TrackDict], cast(Mapping[str, Any], mi_map.get('media', {})).get('track', []))
+                    # no proper auro3d marker in mediainfo, which leaves us vulnerable to misdetection
+                    # only scope the first track to reduce false positives
+                    first_audio_track = next((t for t in tracks if t.get('@type') == "Audio"), None)
+                    first_audio_title = None
+                    if first_audio_track:
+                        first_audio_title = first_audio_track.get('title') or first_audio_track.get('Title')
+                    is_auro3d = bool(first_audio_title and 'auro3d' in str(first_audio_title).lower())
                     has_commentary = False
                     has_compatibility = False
                     has_coms = [t for t in tracks if "commentary" in str(t.get('Title') or '').lower()]
@@ -462,6 +470,9 @@ async def _get_audio_v2(
     if codec == "DD" and chan == "7.1":
         console.print("[warning] Detected codec is DD but channel count is 7.1, correcting to DD+")
         codec = "DD+"
+
+    if not extra and is_auro3d:
+        extra = " Auro3D"
 
     audio = f"{dual} {codec or ''} {format_settings or ''} {chan or ''}{extra or ''}"
     audio = ' '.join(audio.split())
