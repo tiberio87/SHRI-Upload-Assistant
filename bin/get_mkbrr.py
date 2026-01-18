@@ -268,7 +268,7 @@ class MkbrrBinaryManager:
 
         try:
             with (
-                httpx.Client(timeout=60.0) as client,
+                httpx.Client(timeout=60.0, follow_redirects=True) as client,
                 client.stream("GET", download_url) as response,
             ):
                 response.raise_for_status()
