@@ -787,7 +787,8 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
 
         tvdb_episode_name = meta.get('tvdb_episode_name')
         if isinstance(tvdb_episode_name, str):
-            if 'episode' in tvdb_episode_name.lower() or 'tba' in tvdb_episode_name.lower():
+            tvdb_name_lc = tvdb_episode_name.lower()
+            if tvdb_name_lc.startswith('episode') or 'tba' in tvdb_name_lc:
                 meta['auto_episode_title'] = None
             else:
                 meta['auto_episode_title'] = tvdb_episode_name
@@ -821,7 +822,8 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
         if meta.get('auto_episode_title') is None or meta.get('overview_meta') is None:
             tvmaze_name = meta['tvmaze_episode_data'].get('name')
             if meta.get('auto_episode_title') is None and isinstance(tvmaze_name, str):
-                if 'episode' in tvmaze_name.lower() or 'tba' in tvmaze_name.lower():
+                tvmaze_name_lc = tvmaze_name.lower()
+                if tvmaze_name_lc.startswith('episode') or 'tba' in tvmaze_name_lc:
                     meta['auto_episode_title'] = None
                 else:
                     meta['auto_episode_title'] = tvmaze_name
@@ -860,7 +862,8 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
                     episode_details = existing_episode_data
             episode_name = episode_details.get("name")
             if meta.get('auto_episode_title') is None and isinstance(episode_name, str):
-                if 'episode' in episode_name.lower() or 'tba' in episode_name.lower():
+                episode_name_lc = episode_name.lower()
+                if episode_name_lc.startswith('episode') or 'tba' in episode_name_lc:
                     meta['auto_episode_title'] = None
                 else:
                     meta['auto_episode_title'] = episode_name

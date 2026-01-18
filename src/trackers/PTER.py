@@ -58,7 +58,7 @@ class PTER:
         cookiefile = f"{meta['base_dir']}/data/cookies/PTER.txt"
         if os.path.exists(cookiefile):
             cookies = await common.parseCookieFile(cookiefile)
-            async with httpx.AsyncClient(cookies=cookies, timeout=30.0) as client:
+            async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
                 resp = await client.get(url=url)
 
                 return resp.text.find('''<a href="#" data-url="logout.php" id="logout-confirm">''') != -1
@@ -80,7 +80,7 @@ class PTER:
         search_url = f"https://pterclub.com/torrents.php?search={imdb}&incldead=0&search_mode=0&source{source}=1"
 
         try:
-            async with httpx.AsyncClient(cookies=cookies, timeout=10.0) as client:
+            async with httpx.AsyncClient(cookies=cookies, timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(search_url)
 
                 if response.status_code == 200:
@@ -464,7 +464,7 @@ class PTER:
 
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
         download_url = f"https://pterclub.com/download.php?id={id}&passkey={self.passkey}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             r = await client.get(url=download_url)
         if r.status_code == 200:
             async with aiofiles.open(torrent_path, "wb") as tor:

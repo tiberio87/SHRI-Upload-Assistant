@@ -92,7 +92,7 @@ class BHDTV:
         files = {'file': (os.path.basename(torrent_path), torrent_bytes, 'application/x-bittorrent')}
 
         if meta['debug'] is False:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.post(url=self.upload_url, data=data, files=files)
             parsed: Union[Any, None] = None
             if response:

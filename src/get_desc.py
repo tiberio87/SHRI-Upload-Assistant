@@ -285,7 +285,7 @@ class DescriptionBuilder:
             episode_title = meta.get("auto_episode_title") or (
                 episode_name
                 if (
-                    "episode" not in episode_name.lower()
+                    not episode_name.lower().startswith("episode")
                     and "tba" not in episode_name.lower()
                 )
                 else ""
