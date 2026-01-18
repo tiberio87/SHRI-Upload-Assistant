@@ -103,9 +103,18 @@ class ANT:
             }
             tags = [tag for tag in tags if tag.lower() in allowed_tags]
 
+            if tags:
+                console.print(f"[green]{self.tracker}: Using IMDb genres for tagging: {', '.join(tags)}")
+                console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
+                              "You must manually add at least one tag from the approved list when uploaded.")
+                await asyncio.sleep(3)
+
         if not tags:
             console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
             console.print("[yellow]Only use a tag in the approved list found in the site search box.")
+            console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
+                            "You must manually add at least one tag from the approved list when uploaded.")
+            await asyncio.sleep(3)
             user_tag = cli_ui.ask_string("Please enter at least one tag (genre) to use for the upload", default="")
             if user_tag:
                 tags.append(user_tag.replace(' ', '.').lower())
@@ -209,7 +218,7 @@ class ANT:
         if release_group and release_group not in self.banned_groups:
             data.update({'releasegroup': release_group})
         else:
-            data['noreleasegroup'] = 1
+            data.update({'noreleasegroup': 1})
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
@@ -218,13 +227,18 @@ class ANT:
                 console.print('[bold red]Adult content detected[/bold red]')
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
                     data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-                    data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant"})
+                    if not tags:
+                        data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant"})
+                    else:
+                        data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant. User to add tags manually."})
                 else:
                     data.update({'screenshots': ''})  # No screenshots for adult content
             else:
                 data.update({'screenshots': ''})
         else:
             data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
+            if tags:
+                data.update({'flagchangereason': "User prompted to add tags manually"})
 
         headers = {
             'User-Agent': f'Upload Assistant/2.4 ({platform.system()} {platform.release()})'
