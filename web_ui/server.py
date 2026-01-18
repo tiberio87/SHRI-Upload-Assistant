@@ -276,6 +276,29 @@ def health():
     })
 
 
+@app.route('/api/browse_roots')
+def browse_roots():
+    """Return configured browse roots"""
+    roots = _get_browse_roots()
+    if not roots:
+        return jsonify({'error': 'Browsing is not configured', 'success': False}), 400
+
+    items: list[BrowseItem] = []
+    for root in roots:
+        display_name = os.path.basename(root.rstrip(os.sep)) or root
+        items.append({
+            'name': display_name,
+            'path': root,
+            'type': 'folder',
+            'children': []
+        })
+
+    return jsonify({
+        'items': items,
+        'success': True
+    })
+
+
 @app.route('/api/browse')
 def browse_path():
     """Browse filesystem paths"""
@@ -358,8 +381,9 @@ def execute_command():
                 # Build command to run upload.py directly
                 validated_path = _resolve_user_path(path, require_exists=True, require_dir=False)
 
-                upload_script = '/Upload-Assistant/upload.py'
-                command = [sys.executable, '-u', upload_script]
+                base_dir = Path(__file__).parent.parent
+                upload_script = str(base_dir / 'upload.py')
+                command = [sys.executable, '-u', upload_script, validated_path]
 
                 # Add arguments if provided
                 if args:
@@ -368,10 +392,7 @@ def execute_command():
                     parsed_args = shlex.split(args)
                     command.extend(_validate_upload_assistant_args(parsed_args))
 
-                # Ensure any path starting with '-' can't be interpreted as an option
-                command.extend(['--', validated_path])
-
-                command_str = ' '.join(command)
+                command_str = subprocess.list2cmdline(command)
                 print(f"Running: {command_str}")
 
                 yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {command_str}'})}\n\n"
@@ -389,7 +410,7 @@ def execute_command():
                     stderr=subprocess.PIPE,
                     text=True,
                     bufsize=0,  # Completely unbuffered
-                    cwd='/Upload-Assistant',
+                    cwd=str(base_dir),
                     env=env,
                     universal_newlines=True
                 )
