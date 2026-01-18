@@ -122,7 +122,7 @@ class PTP:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(url=url, headers=headers, params=params)
             await asyncio.sleep(1)
 
@@ -177,7 +177,7 @@ class PTP:
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(url, params=params, headers=headers)
         await asyncio.sleep(1)
         try:
@@ -212,7 +212,7 @@ class PTP:
         }
         url = 'https://passthepopcorn.me/torrents.php'
         console.print(f"[yellow]Requesting description from {url} with ID {ptp_torrent_id}")
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(url, params=params, headers=headers)
         await asyncio.sleep(1)
 
@@ -263,19 +263,33 @@ class PTP:
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(url=url, headers=headers, params=params)
         await asyncio.sleep(1)
         try:
-            response = response.json()
-            if response.get('TotalResults'):  # Search results page
-                total_results = int(response.get('TotalResults', 0))
+            if response.status_code != 200:
+                console.print(f"[red]PTP group lookup failed with HTTP {response.status_code}[/red]")
+                if response.text:
+                    console.print(f"[red]Response body (truncated): {response.text[:200]}[/red]")
+                return None
+
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError:
+                content_type = response.headers.get("content-type", "unknown")
+                console.print(f"[red]PTP group lookup returned non-JSON content (content-type: {content_type})[/red]")
+                if response.text:
+                    console.print(f"[red]Response body (truncated): {response.text[:200]}[/red]")
+                return None
+
+            if response_data.get('TotalResults'):  # Search results page
+                total_results = int(response_data.get('TotalResults', 0))
                 if total_results == 0:
                     console.print(f"[yellow]No results found for IMDb: tt{imdb}[/yellow]")
                     return None
                 elif total_results == 1:
                     # Single result - use it
-                    movie = response.get('Movies', [{}])[0]
+                    movie = response_data.get('Movies', [{}])[0]
                     groupID: Optional[str] = str(movie.get('GroupId')) if movie.get('GroupId') is not None else None
                     title = movie.get('Title', 'Unknown')
                     year = movie.get('Year', 'Unknown')
@@ -285,7 +299,7 @@ class PTP:
                 else:
                     # Multiple results - let user choose
                     console.print(f"[yellow]Found {total_results} matches for IMDb: tt{imdb}[/yellow]")
-                    movies = cast(list[dict[str, Any]], response.get('Movies', []))
+                    movies = cast(list[dict[str, Any]], response_data.get('Movies', []))
                     choices: list[str] = []
                     for _i, movie in enumerate(movies):
                         title = movie.get('Title', 'Unknown')
@@ -318,12 +332,12 @@ class PTP:
                     except KeyboardInterrupt:
                         console.print("[yellow]Selection cancelled by user[/yellow]")
                         return None
-            elif response.get("Page") == "Browse":  # No Releases on Site with ID
+            elif response_data.get("Page") == "Browse":  # No Releases on Site with ID
                 return None
-            elif response.get('Page') == "Details":  # Group Found
-                groupID = response.get('GroupId')
+            elif response_data.get('Page') == "Details":  # Group Found
+                groupID = response_data.get('GroupId')
                 console.print(f"[green]Matched IMDb: [yellow]tt{imdb}[/yellow] to Group ID: [yellow]{groupID}[/yellow][/green]")
-                console.print(f"[green]Title: [yellow]{response.get('Name')}[/yellow] ([yellow]{response.get('Year')}[/yellow])")
+                console.print(f"[green]Title: [yellow]{response_data.get('Name')}[/yellow] ([yellow]{response_data.get('Year')}[/yellow])")
                 return str(groupID) if groupID is not None else None
         except Exception:
             console.print("[red]An error has occurred trying to find a group ID")
@@ -344,7 +358,7 @@ class PTP:
             'User-Agent': self.user_agent
         }
         url = "https://passthepopcorn.me/ajax.php"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(url=url, params=params, headers=headers)
         await asyncio.sleep(1)
         tinfo = {}
@@ -412,7 +426,7 @@ class PTP:
         url = 'https://passthepopcorn.me/torrents.php'
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(url, headers=headers, params=params)
                 await asyncio.sleep(1)  # Mimic server-friendly delay
                 if response.status_code == 200:
@@ -449,7 +463,7 @@ class PTP:
         headers = {'referer': 'https://ptpimg.me/index.php'}
         url = "https://ptpimg.me/upload.php"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.post(url, headers=headers, data=payload)
         try:
             response = response.json()

@@ -265,8 +265,11 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
 
     # Filter trackers that are in both the list and tracker_class_map
     valid_trackers = [tracker for tracker in trackers if tracker in tracker_class_map and tracker in http_trackers]
+    # RTF/PTP are not HTTP trackers but need validation
     if "RTF" in trackers:
         valid_trackers.append("RTF")
+    if "PTP" in trackers:
+        valid_trackers.append("PTP")
 
     if valid_trackers:
 
@@ -281,6 +284,8 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
                     console.print(f"[cyan]Validating {tracker_name} credentials...[/cyan]")
                 if tracker_name == "RTF":
                     login = await tracker_class.api_test(meta)
+                elif tracker_name == "PTP":
+                    login = await tracker_class.get_AntiCsrfToken(meta)
                 else:
                     login = await tracker_class.validate_credentials(meta)
 
