@@ -612,6 +612,10 @@ async def _upload_screens(
 
     image_list = cast(list[ImageDict], meta.get('image_list', []))
 
+    # Treat empty allowed host list as no restriction
+    if not allowed_hosts:
+        allowed_hosts = None
+
     # Check if current host is allowed, if not find an approved one
     if allowed_hosts is not None and img_host not in allowed_hosts:
         console.print(f"[yellow]Current image host '{img_host}' is not in allowed hosts: {allowed_hosts}[/yellow]")
