@@ -126,6 +126,11 @@ class TRACKER_SETUP:
         tracker_instance = self._create_tracker_instance(tracker)
         if tracker_instance is None:
             return None
+        if tracker.upper() == "LUME":
+            # LUME doesn't expose a banned_url; sync TRaSH groups and use the file if present
+            await self.sync_trash_groups(meta, file_path)
+            if os.path.exists(file_path):
+                return file_path
         banned_url = getattr(tracker_instance, 'banned_url', None)
         if not isinstance(banned_url, str):
             return None
@@ -224,6 +229,70 @@ class TRACKER_SETUP:
         except Exception as e:
             console.print(f"An error occurred: {e}")
 
+    async def sync_trash_groups(self, meta: Meta, file_path: str) -> None:
+        """Fetch TRaSH guide JSON and extract release group names to ban file.
+
+        This downloads the TRaSH LQ release-group specifications, extracts
+        group names from `ReleaseGroupSpecification` fields, and writes them
+        via `write_banned_groups_to_file` into the tracker's banned file.
+        """
+        url = (
+            "https://raw.githubusercontent.com/TRaSH-Guides/Guides/refs/heads/master/docs/json/radarr/cf/lq.json"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url)
+                if response.status_code != 200:
+                    console.print(f"[red]Failed to fetch TRaSH groups: HTTP {response.status_code}[/red]")
+                    return
+                data = response.json()
+                data = cast(JsonDict, data)
+        except Exception as e:
+            console.print(f"[red]Failed to fetch TRaSH groups: {e}[/red]")
+            return
+
+        specs = cast(list[JsonDict], data.get('specifications', []))
+        groups: list[str] = []
+
+        for spec in specs:
+            try:
+                if spec.get('implementation') != 'ReleaseGroupSpecification':
+                    continue
+                fields = cast(JsonDict, spec.get('fields') or {})
+                val = str(fields.get('value', '') or '')
+                # Prefer a captured group if present: e.g. ^(GROUP)$ or \b(GROUP)\b
+                m = re.search(r"\(([^)]+)\)", val)
+                if m:
+                    name = m.group(1)
+                else:
+                    # Fallback: strip common regex anchors and escapes
+                    name = re.sub(r"[\\\^\$\\b]", "", val)
+                    name = re.sub(r"[\(\)\[\]\|]", "", name).strip()
+
+                if not name:
+                    continue
+
+                # Handle alternation inside the captured name
+                if '|' in name:
+                    parts = [p.strip() for p in name.split('|') if p.strip()]
+                    for p in parts:
+                        if p not in groups:
+                            groups.append(p)
+                else:
+                    if name not in groups:
+                        groups.append(name)
+            except Exception:
+                continue
+
+        json_data = [{"name": g} for g in groups]
+
+        if not json_data:
+            if meta.get('debug'):
+                console.print("[yellow]No groups extracted from TRaSH data.[/yellow]")
+            return
+
+        await self.write_banned_groups_to_file(file_path, json_data, debug=meta.get('debug', False))
+
     def _write_file(self, file_path: str, data: JsonDict) -> None:
         """ Blocking file write operation, runs in a background thread """
         with open(file_path, "w", encoding="utf-8") as file:
@@ -255,7 +324,7 @@ class TRACKER_SETUP:
         if 'taoe' in group_tags:
             group_tags = 'taoe'
 
-        if tracker.upper() in ("AITHER", "LST", "SPD"):
+        if tracker.upper() in ("AITHER", "LST", "LUME", "SPD"):
             file_path = await self.get_banned_groups(meta, tracker)
             if file_path == "empty":
                 console.print(f"[bold red]No banned groups found for '{tracker}'.")
