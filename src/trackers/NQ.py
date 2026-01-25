@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
-import re
 from typing import Any, Optional
 
 from src.console import console
