@@ -673,7 +673,7 @@ config = {
             "anon": False,
             # Send uploads to NordiQuality modq for staff approval
             "modq": False,
-        },        
+        },
         "OE": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
