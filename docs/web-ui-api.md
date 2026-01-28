@@ -77,19 +77,20 @@ If you plan to run `curl.exe` from Qui on a Windows host using PowerShell, use `
 Program Path (Qui):
 
 ```
-C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+powershell.exe
 ```
 
 Arguments Template (Qui):
 
 ```
--NoProfile -NonInteractive -Command "curl.exe -sS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer <API_TOKEN>' -d '{\"path\":\"{content_path}\",\"args\":\"-ua\",\"session_id\":\"{hash}\"}' http://127.0.0.1:5000/api/execute"
+-NoProfile -NonInteractive -Command "curl.exe -sS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer <API_TOKEN>' -d '{"path":"{content_path}","args":"-ua","session_id":"{hash}"}' http://127.0.0.1:5000/api/execute"
 ```
 
 Notes:
 - Qui will substitute `{content_path}` and `{hash}` into the arguments template before launching PowerShell. The JSON payload is wrapped as one argument to `curl.exe` and uses escaped double-quotes so PowerShell passes the literal JSON to `curl.exe`.
 - If Upload‑Assistant is not on `127.0.0.1:5000` from the Qui host, replace the URL with the reachable service address.
 - If you face quoting headaches, prefer the wrapper script approach (PowerShell `ConvertTo-Json` or a small `.ps1` file) which avoids manual JSON escaping.
+- No terminal is required/terminal does not work with the above setup.
 
 ### /api/input
 - Methods: POST

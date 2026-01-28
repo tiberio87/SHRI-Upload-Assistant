@@ -2755,10 +2755,22 @@ def execute_command():
                         d: dict[str, str] = {}
                         m_path = re.search(r'path\s*[:=]\s*["\']?([^"\'\},]+)', raw)
                         m_sess = re.search(r'session_id\s*[:=]\s*["\']?([^"\'\},]+)', raw)
+                        m_args = re.search(r'args\s*[:=]\s*["\']?([^"\'\}]+)', raw)
                         if m_path:
                             d['path'] = m_path.group(1)
                         if m_sess:
                             d['session_id'] = m_sess.group(1)
+                        if m_args:
+                            # Trim any trailing quote/comma characters and preserve spacing
+                            raw_args = m_args.group(1).strip()
+                            # Defensive: some shells or quoting can produce a
+                            # concatenated fragment like `--debug,session_id:...`.
+                            # Strip any trailing `,session_id` fragment or any
+                            # comma followed by a session_id key so args remain
+                            # clean.
+                            raw_args = re.split(r',\s*(?:"?session_id|session_id)\b', raw_args)[0]
+                            raw_args = raw_args.rstrip(',').strip().strip('"').strip("'")
+                            d['args'] = raw_args
                         if d:
                             data = d
             except Exception:
