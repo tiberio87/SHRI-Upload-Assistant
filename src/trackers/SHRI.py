@@ -14,6 +14,7 @@ from babel import Locale
 from babel.core import UnknownLocaleError
 
 from src.audio import AudioManager
+from src.console import console
 from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -332,7 +333,7 @@ class SHRI(UNIT3D):
                     )
                     if region_name:
                         break
-                    print("Region code is required.")
+                    console.print("Region code is required.", markup=False)
 
             # Validate region name was provided
             if not region_name:
@@ -856,7 +857,7 @@ class SHRI(UNIT3D):
                         if not logo_url and fallback_logo:
                             logo_url = f"https://image.tmdb.org/t/p/w300{fallback_logo}"
         except Exception as e:
-            print(f"[DEBUG] TMDb fetch error: {e}")
+            console.print(f"[DEBUG] TMDb fetch error: {e}", markup=False)
 
         return summary, logo_url
 
@@ -1056,7 +1057,7 @@ class SHRI(UNIT3D):
                 "subs": subs,
             }
         except Exception as e:
-            print(f"[DEBUG] Mediainfo extraction error: {e}")
+            console.print(f"[DEBUG] Mediainfo extraction error: {e}", markup=False)
             import traceback
 
             traceback.print_exc()

@@ -29,6 +29,7 @@ RUN pip install --upgrade pip==25.3 wheel==0.45.1 requests==2.32.5
 WORKDIR /Upload-Assistant
 
 # Copy DVD MediaInfo download script and run it
+# This downloads specialized MediaInfo binaries for DVD processing with language support
 COPY bin/get_dvd_mediainfo_docker.py bin/
 RUN python3 bin/get_dvd_mediainfo_docker.py
 
