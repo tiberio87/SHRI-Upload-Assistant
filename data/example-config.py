@@ -139,7 +139,7 @@ config = {
         "tone_map": True,
 
         # Set false to disable libplacebo ffmpeg tonemapping and use ffmpeg only
-        # This is a good toggle if you have any ffmpeg related issues when tonemapping
+        # This is a good toggle if you have any ffmpeg related issues when tonemapping, especially on seedboxes
         "use_libplacebo": True,
 
         # Set true to skip ffmpeg check, useful if you know your ffmpeg is compatible with libplacebo
@@ -307,7 +307,7 @@ config = {
         # Does not override MTV preference for small pieces
         "prefer_max_16_torrent": False,
 
-        # Tracker based rehashing cooldown,set true to enable
+        # Tracker based rehashing cooldown.
         # For trackers that might need specific piece size rehashing, using a value higher than 0 will add the specified cooldown
         # in (seconds) before rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
         "rehash_cooldown": "0",
