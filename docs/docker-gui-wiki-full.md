@@ -59,10 +59,11 @@ services:
       # Map host port to container port (change for host-only binding if desired)
       - "5000:5000"
     volumes:
-      - /host/path/Upload-Assistant/data:/Upload-Assistant/data:rw
-      - /host/path/Upload-Assistant/data/sessions:/Upload-Assistant/data/sessions:rw
-      - /host/path/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw
-      - /host/torrents:/data/torrents:rw
+      - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
+      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
+      - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
+      - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
+      - /mnt/user/appdata/Upload-Assistant/webui-auth:/root/.config/upload-assistant:rw # persist web UI session auth config
     networks:
       - appnet
 

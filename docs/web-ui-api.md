@@ -14,7 +14,7 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 - Methods: GET
 - Auth: requires web session (login/remember)
 - Description: returns per-session CSRF token for use by the frontend
-- Response: {"csrf_token": "<token>", "success": true}
+- Response: {"csrf_token": "`<token>`", "success": true}
 
 **/api/2fa/status**
 - Methods: GET
@@ -47,7 +47,7 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 - Methods: POST
 - Auth: requires web session + CSRF + Origin (disallows API tokens or basic auth)
 - Description: generate a temporary TOTP secret, provisioning URI and one-time recovery codes; stores temp values in session
-- Response: {"secret": "<base32>", "uri": "otpauth://...", "recovery_codes": [...], "success": true}
+- Response: {"secret": "`<base32>`", "uri": "otpauth://...", "recovery_codes": [...], "success": true}
 
 **/api/2fa/enable**
 - Methods: POST
@@ -83,9 +83,9 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 **/api/config_update**
 - Methods: POST
 - Auth: requires web session + CSRF + Origin (disallows bearer/basic auth)
-- POST payload: {"path": ["SECTION", "KEY"], "value": <value>} (path is array of path components)
+- POST payload: {"path": ["SECTION", "KEY"], "value": `<value>`} (path is array of path components)
 - Description: updates data/config.py with a coerced Python literal of the provided value; special handling for certain client lists
-- Response: {"success": true, "value": <json-safe-value>}
+- Response: {"success": true, "value": `<json-safe-value>`}
 
 **/api/config_remove_subsection**
 - Methods: POST
@@ -101,10 +101,10 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
   - Response: {"success": true, "tokens": [...], "read_only": false}
 - POST: create or store a token
   - payload for generate: {"action": "generate", "label": "...", "persist": true|false}
-  - payload for store: {"action": "store", "token": "<token_string>", "label": "..."}
-  - Response (generate): {"success": true, "token": "<token_or_null>", "persisted": true|false}
+  - payload for store: {"action": "store", "token": "`<token_string>`", "label": "..."}
+  - Response (generate): {"success": true, "token": "`<token_or_null>`", "persisted": true|false}
 - DELETE: revoke token
-  - payload: {"id": "<token_id>"}
+  - payload: {"id": "`<token_id>`"}
   - Response: {"success": true}
 
 **/api/browse**
@@ -118,7 +118,7 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 - Methods: POST, OPTIONS
 - Auth: POST requires CSRF header for session callers; Bearer tokens are allowed for programmatic use (must be valid)
 - Rate limit: 100 per hour (keyed by _rate_limit_key_func)
-- POST payload: {"path": "<file>", "args": "<cmdline args>", "session_id": "<id>"}
+- POST payload: {"path": "`<file>`", "args": "`<cmdline args>`", "session_id": "`<id>`"}
 - Description: starts an upload.py run (subprocess or in-process) and streams server-sent events (SSE) from the returned connection. OPTIONS returns 204.
 - Response: SSE stream; on API level, initial validation errors return JSON like {"error":"...","success":false}
 

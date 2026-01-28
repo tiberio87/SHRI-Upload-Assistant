@@ -19,7 +19,7 @@ python upload.py "/path/to/folder" "/another/path" --webui 127.0.0.1:8080
 	- `SESSION_SECRET` or `SESSION_SECRET_FILE` — provide a stable session secret (recommended for persistent deployments).
 
 Notes:
-- The server enforces that browse roots are only the configured roots (it will not expose arbitrary filesystem locations). Paths supplied on the command line or via `UA_BROWSE_ROOTS` are normalized and validated by the server before being exposed.
+- The server enforces that browse roots only the only configured roots (it will not expose arbitrary filesystem locations). Paths supplied on the command line or via `UA_BROWSE_ROOTS` are normalized and validated by the server before being exposed.
 - If you get "No browse roots specified" when starting with `--webui`, set `UA_BROWSE_ROOTS` or pass one or more paths on the command line as in the example above.
 - The webui arg uses `127.0.0.1:5000` by default. `HOST:PORT` are only needed if overriding.
 
