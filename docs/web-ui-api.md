@@ -22,28 +22,28 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 - Description: whether TOTP 2FA is enabled for the user
 - Response: {"enabled": true|false, "success": true}
 
-- ### /api/access_log/level
+### /api/access_log/level
 - Methods: GET, POST
 - Auth: GET — requires web session + CSRF + Origin; POST — requires web session + CSRF + Origin
 - POST payload: {"level": "access_denied"|"access"|"disabled"}
 - Description: read or set access logging level
 - Responses: GET -> {"success": true, "level": "..."}; POST -> {"success": true, "level": "..."}
 
-- ### /api/access_log/entries
+### /api/access_log/entries
 - Methods: GET
 - Auth: requires web session + CSRF + Origin
 - Query params: n (number of entries, default 50, max 200)
 - Description: returns recent access log entries
 - Response: {"success": true, "entries": [...]} 
 
-- ### /api/ip_control
+### /api/ip_control
 - Methods: GET, POST
 - Auth: requires web session + CSRF + Origin for both GET and POST
 - POST payload: {"whitelist": ["1.2.3.4"], "blacklist": ["5.6.7.8"]}
 - Description: read or update IP whitelist/blacklist (IP addresses validated)
 - Response: GET -> {"success": true, "whitelist": [...], "blacklist": [...]}; POST -> {"success": true}
 
-- ### /api/2fa/setup
+### /api/2fa/setup
 - Methods: POST
 - Auth: requires web session + CSRF + Origin (disallows API tokens or basic auth)
 - Description: generate a temporary TOTP secret, provisioning URI and one-time recovery codes; stores temp values in session
@@ -114,7 +114,7 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 - Description: lists files and subfolders in resolved path; skips unsupported video extensions and hidden files
 - Response: {"items": [...], "success": true, "path": "...", "count": N}
 
-- ### /api/execute
+### /api/execute
 - Methods: POST, OPTIONS
 - Auth: POST requires CSRF header for session callers; Bearer tokens are allowed for programmatic use (must be valid)
 - Rate limit: 100 per hour (keyed by _rate_limit_key_func)
