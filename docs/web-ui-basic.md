@@ -16,7 +16,7 @@ python upload.py "/path/to/folder" "/another/path" --webui 127.0.0.1:8080
 - Other optional environment variables used by the Web UI:
 	- `UA_WEBUI_USE_SUBPROCESS` — if set (non-empty) the server will run uploads in a subprocess rather than in-process (affects interactive behavior and Rich output recording).
 	- `UA_WEBUI_CORS_ORIGINS` — comma-separated list of allowed origins for `/api/*` when remote clients need cross-origin access.
-	- `SESSION_SECRET` or `SESSION_SECRET_FILE` — provide a stable session secret (recommended for persistent deployments (permission handling needed)).
+	- `SESSION_SECRET` or `SESSION_SECRET_FILE` — provide a stable session secret (permission handling needed). Do not just use this by default.
 
 Notes:
 - The server enforces that browse roots only the only configured roots (it will not expose arbitrary filesystem locations). Paths supplied on the command line or via `UA_BROWSE_ROOTS` are normalized and validated by the server before being exposed.
