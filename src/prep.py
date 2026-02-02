@@ -1115,12 +1115,17 @@ class Prep:
             meta['hdr'] = await video_manager.get_hdr(mi_data, bdinfo)
 
             meta['distributor'] = await get_distributor(meta['distributor'])
+            if meta['distributor'] is None:
+                meta['distributor'] = ""
 
             if meta.get('is_disc', None) == "BDMV":  # Blu-ray Specific
                 meta['region'] = await get_region(bdinfo, meta.get('region', None))
                 meta['video_codec'] = await video_manager.get_video_codec(bdinfo)
             else:
                 meta['video_encode'], meta['video_codec'], meta['has_encode_settings'], meta['bit_depth'] = await video_manager.get_video_encode(mi_data, meta['type'], bdinfo)
+
+            if meta['region'] is None:
+                meta['region'] = ""
 
             if meta.get('no_edition') is False:
                 manual_edition = meta.get('manual_edition') or ""
